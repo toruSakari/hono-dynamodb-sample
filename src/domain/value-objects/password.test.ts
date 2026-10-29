@@ -1,30 +1,26 @@
-import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import { createPassword, restorePassword, passwordHashForPersistence } from './password.js';
-import { EmailAddressSchema, UserStatusSchema, PasswordCandidateSchema, NewPasswordSchema } from './index.js';
-import { passwordHasher } from '../../infrastructure/password-hasher.js';
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { Password } from "./password.js";
+import { PasswordCandidateSchema, NewPasswordSchema } from "./index.js";
+import { passwordHasher } from "../../infrastructure/security/argon2-password-hasher.js";
 
-test('メール・状態・照合候補はそれぞれ独自のルールを持つ', () => {
-  assert.equal(EmailAddressSchema.parse(' Demo@example.com '), 'Demo@example.com');
-  assert.throws(() => EmailAddressSchema.parse('not-an-address'));
-  assert.throws(() => EmailAddressSchema.parse('a\nb@example.com'));
-  assert.throws(() => UserStatusSchema.parse('deleted'));
-  assert.equal(PasswordCandidateSchema.parse('short'), 'short');
-  assert.throws(() => NewPasswordSchema.parse('short'));
-  assert.throws(() => PasswordCandidateSchema.parse('x'.repeat(129)));
-});
-
-test('Password はハッシュだけを非公開に保持し、生成・復元・照合を担当する', async () => {
-  const input = NewPasswordSchema.parse('demo-only-long-password');
-  const password = await createPassword(input, passwordHasher);
+void test("Password はハッシュだけを非公開に保持し、生成・復元・照合を担当する", async () => {
+  const input = NewPasswordSchema.parse("demo-only-long-password");
+  const password = await Password.create(input, passwordHasher);
+  assert(Object.isFrozen(Password));
   assert(Object.isFrozen(password));
-  assert.equal(JSON.stringify(password), '{}');
-  assert.equal('hash' in password, false);
-  assert.equal('plaintext' in password, false);
-  const stored = passwordHashForPersistence(password);
-  const restored = restorePassword(stored);
-  assert.equal(passwordHashForPersistence(restored), stored);
+  // 故意にブランド/インスタンス型を偽装し、実行時検証が迂回できないことを確認する。
+  assert.throws(() => Password.toPersistenceSnapshot({} as Password));
+  assert.equal(JSON.stringify(password), "{}");
+  assert.equal("hash" in password, false);
+  assert.equal("plaintext" in password, false);
+  const stored = Password.toPersistenceSnapshot(password);
+  const restored = Password.restore(stored);
+  assert.equal(Password.toPersistenceSnapshot(restored), stored);
   assert(await restored.matches(PasswordCandidateSchema.parse(input), passwordHasher));
-  assert.equal(await restored.matches(PasswordCandidateSchema.parse('wrong'), passwordHasher), false);
-  assert.throws(() => restorePassword('plaintext'));
+  assert.equal(
+    await restored.matches(PasswordCandidateSchema.parse("wrong"), passwordHasher),
+    false,
+  );
+  assert.throws(() => Password.restore("plaintext"));
 });

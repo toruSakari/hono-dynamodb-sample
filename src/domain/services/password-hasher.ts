@@ -1,6 +1,6 @@
-import type { NewPassword } from '../value-objects/new-password.js';
-import type { PasswordCandidate } from '../value-objects/password-candidate.js';
-import type { PasswordHash } from '../value-objects/password-hash.js';
+import type { NewPassword } from "../value-objects/new-password.js";
+import type { PasswordCandidate } from "../value-objects/password-candidate.js";
+import type { PasswordHash } from "../value-objects/password-hash.js";
 
 // アルゴリズムの実装はインフラへ依存性逆転する。
 export interface PasswordHasher {

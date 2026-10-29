@@ -3,8 +3,9 @@
 検証環境: Node.js v24.22.1 / npm 11.9.0 / Java 21 / DynamoDB Local 3.3.2。
 
 - 分割代入禁止の AST 検査: 実装・テスト・スクリプトを検査し成功。
-- TypeScript 型検査: src と scripts を含め成功。管理対象のJS/mjs/cjsなし。
-- ドメイン・Hono リクエストテスト: 36 件成功。
+- Vite+ 1.4.0: starter準拠の全体整形・型付きlint（unsafe any検査を含む）・型チェック成功。
+- TypeScript 型検査: src / scripts / vite.config.ts を含め成功。管理対象のJS/mjs/cjsなし。
+- ドメイン・Hono リクエストテスト: 40 件成功。
 - ElectroDB + 実 DynamoDB Local 統合テスト: 2 件成功。
   Orderはルート+全明細の一括保存、競合時の部分変更なし、厳格なネスト復元、未存在更新拒否を確認。
   Userは保存・復元・パスワード照合/変更・メール変更・無効化/復帰・改名・条件付き保存の競合・破損データ拒否・旧形式互換・未知フィールド/他モデル拒否を確認。

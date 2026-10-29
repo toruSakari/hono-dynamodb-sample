@@ -47,59 +47,43 @@ curl -sS -X PATCH "http://127.0.0.1:3000/users/$USER_ID/name" \
 ```text
 src/
   domain/
-    entities/
-      user.ts                 User 集約と不変なドメイン操作
-      order.ts                注文の集約ルート
-      order-line.ts           注文明細の子エンティティ（単独Repositoryなし）
-    value-objects/
-      user-id.ts              UUID のブランド型
-      user-name.ts            表示名のルール
-      email-address.ts        メールアドレスの構文ルール
-      user-status.ts          active / disabled
-      order-*.ts              注文/明細のID、注文状態
-      product-code.ts         商品コード
-      quantity.ts             数量1〜99
-      unit-price-yen.ts       整数の円単価
-      new-password.ts        新規・変更用の平文入力
-      password-candidate.ts  照合用入力（新規ルールと区別）
-      password-hash.ts        保存済み Argon2id PHC の検証
-      password.ts             ハッシュ化・照合・復元を担う不変 Password
-      index.ts                HTTP/ユースケース向け公開窓口
-    repositories/
-      user-repository.ts     User集約のRepository契約
-      order-repository.ts    Order集約全体のRepository契約
-    services/
-      password-hasher.ts     ハッシュアルゴリズムの抽象
-    errors/
-      domain-rule-error.ts   不正状態操作・現在パスワード不一致
-  application/
-    user-service.ts          登録・取得・改名・メール/パスワード変更・状態操作
-    order-service.ts         顧客確認・注文作成・明細変更・確定
+    entities/                    User / Order / OrderLine と横置きテスト
+    value-objects/               ブランドVO / Password と横置きテスト
+    repositories/                集約を入出力するRepository契約
+    services/password-hasher.ts  ハッシュアルゴリズムの抽象
+    errors/                      ドメインルール違反・集約共通の競合
+  application/use-cases/
+    user-service.ts              UserService契約とUserユースケース
+    order-service.ts             OrderService契約とOrderユースケース
   infrastructure/
-    persistence/
-      user-model.ts          UserのElectroDB保存モデル
-      order-model.ts         注文全体を1アイテムにする保存モデル
-    user-repository.ts       User用ElectroDBアダプター
-    order-repository.ts      Order用、ルートversion条件で全明細を一括保存
-    password-hasher.ts       Argon2id アダプター
-    dynamodb.ts              ローカル専用接続
-    init-table.ts            テーブル初期化
+    dynamodb/
+      client.ts                  Local専用SDKクライアント
+      init-tables.ts             テーブル初期化
+      models/                    User / OrderのElectroDB保存モデル
+      repositories/              集約単位の保存実装と横置き実DB統合テスト
+    security/
+      argon2-password-hasher.ts  Argon2idアダプター
   presentation/
-    http/contracts.ts        UserのZod/OpenAPI定義
-    http/order-contracts.ts  OrderのZod/OpenAPI定義
-    middleware/
-      request-context.ts     相関ID・計測・HTTPヘッダ
-  testing/
-    memory-user-repository.ts テスト専用Repository
-  app.ts                     OpenAPIHono、ルート登録、エラー変換
-  server.ts                  依存関係の組み立て
+    app.ts                       HTTPアプリの配線
+    schemas/                     公開DTO・HTTP入力のZodスキーマ
+    routes/                      OpenAPIルート定義・ハンドラー登録・横置きテスト
+    middleware/                  相関ID・時間・HTTPヘッダ・エラー変換
+    testing/                     HTTPテストのunknown境界ヘルパー
+  bootstrap/
+    server.ts                    手動DIのComposition Rootとサーバー起動
+  testing/repositories/          User / Orderのメモリ版テストアダプター
+
+scripts/
+  run-tests.ts                   node:testの収集と実行
+  check-no-destructuring.ts      全分割代入・JS混入のASTチェック
+vite.config.ts                  Vite+のformat / 型付きlint設定
 ```
 
 - **User 集約**: ID とユーザー名、メール、状態、パスワード、バージョンを一貫した単位として扱います。
 - **値オブジェクト**: それぞれ独立ファイルで検証済みブランド型を定義します。`Password` はさらに、非公開ハッシュと `matches()` を持つ凍結した操作オブジェクトです。ソルト付きハッシュの単純比較をパスワードの等価判定には使いません。
 - **境界検証**: HTTP の unknown を Zod で検証してからユースケース・集約に渡します。ブランド型は実行時の防御ではないため、生成・復元時にも検証します。
 - **不変更新**: `user.rename(name)` は同じ ID の新しい User を返し、元を変更しません。保存はユースケースがリポジトリに依頼します。
-- **閉じた状態**: 状態はクロージャ、外部には `Object.freeze` した操作オブジェクトだけを渡します。値はプリミティブだけなので浅い freeze で足ります。入れ子を追加するなら防御的コピーや深い不変性が必要です。
+- **閉じた状態**: 状態はクロージャ、外部には `Object.freeze` した操作オブジェクトだけを渡します。Userの状態はプリミティブですが、Orderの明細には配列と子があるため、防御的コピーと深い凍結を行います。
 - **Repository**: DTO ではなく集約を受け取り、取得時も集約を返します。DB の生レコードを `User.restore(unknown)` で検証し直します。
 - **並行更新**: 読み込んだ version を条件に保存し、競合を検出します。1回の更新は1回のドメイン操作を想定します。HTTP クライアントの長時間保持した古い画面に対する ETag / If-Match は未実装です。
 - この規模ではドメインイベント、Unit of Work、複数集約のトランザクションなどは不要なため省略しています。
@@ -127,7 +111,7 @@ src/
 ユーザーが有効か、現在のパスワードが一致するか、といった業務ルールはミドルウェアに置きません。
 User 集約が判定し、ユースケースが取得/保存を調整し、HTTP 層がステータスへ変換します。
 
-`server.ts` が **Composition Root** です。DI コンテナを使わず、
+`src/bootstrap/server.ts` が **Composition Root** です。DI コンテナを使わず、
 DynamoDB client → User/OrderのElectroDB Repository → UserService/OrderService → Hono app の順で手動で組み立てます。
 `createApp(userService, orderService)` にテスト用サービスを注入でき、相関 ID 生成と時計もテストで差し替えられます。
 domain / application は Hono の Context を参照しません。
@@ -154,17 +138,33 @@ AWS SDK v3 の DynamoDBDocumentClient を注入し、Local の接続先は従来
 const user = await User.create(validName, validPassword, hasher, validEmail);
 const restored = User.restore(databaseRecord);
 const row = User.toPersistenceSnapshot(restored); // リポジトリ専用・外部出力禁止
-const dto = restored.snapshot();                  // HTTP に渡せる公開 DTO
+const dto = restored.snapshot(); // HTTP に渡せる公開 DTO
 ```
 
 `User` は TypeScript 上の型名と値名を兼ねます。各インスタンスは独立したクロージャを持ちます。
 `User.toPersistenceSnapshot` をまとめても情報を全公開するわけではなく、WeakMap に登録された
 正規のインスタンスだけを受け付けます。ただし呼び出し元の権限を強制する仕組みではありません。
 
+### 同じ責務は同じ書き方にする
+
+- 状態と振る舞いを持つ `User` / `Order` / `OrderLine` / `Password` は、
+  `Object.freeze({ create() {}, restore() {}, toPersistenceSnapshot() {} })` に直接メソッドを定義します。
+  別の公開関数を束ねるだけの形にはしません。
+- インスタンス、ユースケース、Repositoryの操作オブジェクトも直接メソッド記法で揃えます。
+  `map` などの短いコールバックにはアロー関数を使います。
+- 単純な文字列・数値のVOは `XxxSchema` と `Xxx` ブランド型のペアに統一します。
+  振る舞いのないVOを不要なオブジェクトで包みません。
+- `Password.create()` はハッシュ計算があるためasync、保存スナップショットはハッシュ文字列です。
+  この意味のある違いは、他のオブジェクトと無理に同一化しません。
+- メモリ版Repositoryも凍結した直接メソッドで、命名は `createMemoryUserRepository` /
+  `createMemoryOrderRepository` に統一。テストは責務ごとに実装横へ置きます。
+
 ## パスワードと公開境界
 
 `NewPassword` は 15〜128 の JavaScript 文字列長で検証し、trim / 正規化しません。
 この長さルールはサンプル上の業務ルールであり、包括的な認証ポリシーではありません。
+`Password.matches(candidate, hasher)` ではなく、生成した値の `password.matches(candidate, hasher)` で照合します。
+`Password.toPersistenceSnapshot(password)` は保存境界専用で、公開DTOに含めません。
 Argon2id はメモリ 64 MiB、反復 3、並列度 1、ランダムソルト 16 bytes、ハッシュ 32 bytes。
 `PasswordHasher` インターフェースをドメイン側に置き、ライブラリ依存はインフラに隔離します。
 
@@ -272,10 +272,31 @@ curl -sS -X POST http://127.0.0.1:3000/orders/$ORDER_ID/confirm
 型のPick/Omitは実行時に値を削除しないため、`snapshot()` でも公開項目を明示的に取り出します。
 HTTP側でも公開Zodスキーマを用い、ハッシュが応答に現れないことをテストしています。
 
+## Vite+ と明示型
+
+`agent-ready-boilerplate` の設定を参照して **vite-plus 1.4.0** と
+`vite = npm:@voidzero-dev/vite-plus-core@1.4.0` を導入しています。通常のViteだけではありません。
+参照先の0.3.3には間接依存のVitestに既知の脆弱性があったため、設定方針は保ちつつ修正済みの1.4.0を使用しています。
+このAPIはNode上で実行するため、フロントエンド用React/Cloudflare設定やjsdomは持ち込みません。
+
+- `npm run format`: starterと同じVite+ formatter。幅100、LF、末尾改行、ダブルクォート、セミコロン、objectWrap preserve。
+- `npm run check:vite`: `vp check` でformat・型付きlint・型チェック。
+- `npm run typecheck`: `tsc --noEmit`。src/scripts/vite.config.ts、strict、未使用・未検査index・exactOptionalPropertyTypesを確認。
+- explicit anyとunsafe assignment/member access/return/argument/callは型付きlintで拒否。
+- 公開factory・ドメイン操作・UserService/OrderService・Repositoryには引数/戻り値型を明示。
+  Hono/ElectroDBの型安全なジェネリックcallback推論は維持し、不必要な型アサーションは使いません。
+- 外部JSONやSDKのanyを含む結果はunknownとして受け、Zod等で検証してから扱います。
+- 元のテストはnode:testなので、`vp test`へ機械的に置換せず、TypeScriptのテストランナーを維持。
+- クラスではなくクロージャfactoryに操作群をまとめるため、その範囲と長い統合シナリオだけ関数長の警告基準を調整。
+  型ルール、全分割代入禁止、JS混入禁止は緩めません。
+
+`import ".../user.js"` はNodeNextのモジュール指定です。管理する実ファイルは `.ts` だけで、
+tsxがTypeScriptへ解決します。JavaScript生成物をリポジトリに追加するものではありません。
+
 ## テスト
 
 ```sh
-npm run check                 # 分割代入AST検査 + 型検査 + テスト（DB不要）
+npm run check                 # AST + Vite+ format/型付きlint + tsc + テスト（DB不要）
 docker compose up -d
 npm run db:init
 npm run test:integration      # 実 DynamoDB Local: 保存/復元/メール/パスワード/状態遷移/競合/破損レコード
@@ -284,9 +305,9 @@ docker compose down
 
 統合テストは自分で作成した UUID のレコードだけを削除します。
 テスト用テーブル名は `ClosureSampleUsers` と `ClosureSampleOrders`。AWS 実環境への接続機能はありません。
-`src/infrastructure/dynamodb.ts` の認証情報 `local/local` は DynamoDB Local 用のダミーです。
+`src/infrastructure/dynamodb/client.ts` の認証情報 `local/local` は DynamoDB Local 用のダミーです。
 テストは実装ファイルの隣に配置しています（例: `entities/user.ts` と `entities/user.test.ts`）。
-実 DB 統合テストも `infrastructure/user-repository.integration.ts` に配置しています。
+実 DB 統合テストも `infrastructure/dynamodb/repositories/user-repository.integration.ts` に配置しています。
 `scripts/run-tests.ts` が再帰的に収集するので、POSIX / PowerShell の glob や環境変数構文に依存しません。
 
 ## 公開前の注意
@@ -297,17 +318,20 @@ docker compose down
 ライセンスは利用者の選択に委ね、このサンプルには未指定です。
 
 参考:
+
 - [Hono の Node.js ガイド](https://hono.dev/docs/getting-started/nodejs)
 - [AWS の DynamoDB Local ガイド](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.DownloadingAndRunning.html)
 - [node-argon2](https://github.com/ranisalt/node-argon2)
 
 ElectroDB 公式参考:
+
 - [AWS SDK v3 クライアント](https://electrodb.dev/en/reference/dynamodb-client/)
 - [条件付き create](https://electrodb.dev/en/mutations/create/)
 - [put と where 条件](https://electrodb.dev/en/mutations/put/)
 - [カスタムキーの定義](https://electrodb.dev/en/modeling/indexes/)
 
 OpenAPI 公式参考:
+
 - [Hono Zod OpenAPI](https://hono.dev/examples/zod-openapi)
 - [Hono Swagger UI](https://hono.dev/examples/swagger-ui)
 

@@ -3,18 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": "^22.18.0 || >=24.11.0"
-  },
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "start": "node --import tsx src/server.ts",
-    "db:init": "node --import tsx src/infrastructure/init-table.ts",
+    "dev": "tsx watch src/bootstrap/server.ts",
+    "start": "node --import tsx src/bootstrap/server.ts",
+    "db:init": "node --import tsx src/infrastructure/dynamodb/init-tables.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx scripts/run-tests.ts",
     "test:integration": "node --import tsx scripts/run-tests.ts --integration",
-    "check": "npm run check:style && npm run typecheck && npm test",
-    "check:style": "node --import tsx scripts/check-no-destructuring.ts"
+    "check": "npm run check:style && npm run check:vite && npm run typecheck && npm test",
+    "check:style": "node --import tsx scripts/check-no-destructuring.ts",
+    "format": "vp fmt",
+    "check:format": "vp fmt --check",
+    "check:vite": "vp check"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1159.0",
@@ -31,6 +31,14 @@
     "@babel/parser": "^8.0.8",
     "@types/node": "^26.6.6",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
+    "vite-plus": "1.4.0"
+  },
+  "overrides": {
+    "vite": "$vite"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
   }
 }
