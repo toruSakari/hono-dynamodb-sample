@@ -4,26 +4,31 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": "^22.18.0 || >=24.11.0"
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node --import tsx src/server.ts",
     "db:init": "node --import tsx src/infrastructure/init-table.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test test/*.test.ts",
-    "test:integration": "RUN_DYNAMODB_TESTS=1 node --import tsx --test test/dynamodb.integration.ts",
-    "check": "npm run typecheck && npm test"
+    "test": "node scripts/run-tests.mjs",
+    "test:integration": "node scripts/run-tests.mjs --integration",
+    "check": "npm run check:style && npm run typecheck && npm test",
+    "check:style": "node scripts/check-no-destructuring.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1159.0",
     "@aws-sdk/lib-dynamodb": "^3.1159.0",
     "@hono/node-server": "^2.1.5",
+    "@hono/swagger-ui": "^0.6.2",
+    "@hono/zod-openapi": "^1.6.3",
     "argon2": "^0.45.1",
+    "electrodb": "^3.9.3",
     "hono": "^4.13.14",
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@babel/parser": "^8.0.8",
     "@types/node": "^26.6.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"

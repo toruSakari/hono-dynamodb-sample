@@ -1,6 +1,6 @@
 import argon2 from 'argon2';
-import type { PasswordHasher } from '../domain/user.js';
-import { PasswordHashSchema } from '../domain/value-objects.js';
+import type { PasswordHasher } from '../domain/services/password-hasher.js';
+import { PasswordHashSchema } from '../domain/value-objects/password-hash.js';
 
 export const passwordHasher: PasswordHasher = Object.freeze<PasswordHasher>({
   async hash(password) {

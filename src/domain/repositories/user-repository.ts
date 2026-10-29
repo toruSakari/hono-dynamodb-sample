@@ -1,5 +1,5 @@
-import type { User } from './user.js';
-import type { UserId } from './value-objects.js';
+import type { User } from '../entities/user.js';
+import type { UserId } from '../value-objects/user-id.js';
 
 export class ConflictError extends Error {}
 export interface UserRepository {
