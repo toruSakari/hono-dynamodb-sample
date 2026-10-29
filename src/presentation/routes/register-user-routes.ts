@@ -1,8 +1,6 @@
-import { DynamoUserRepository } from "../../infrastructure/dynamodb/repositories/user-repository.js";
-import type { AppDependencies, AppOptions } from "../dependencies.js";
+import type { UserRouteDependencies } from "../dependencies.js";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { HttpEnvironment } from "../middleware/request-context.js";
-import { UserService } from "../../application/use-cases/user-service.js";
 import { PublicUserSchema } from "../schemas/user-schemas.js";
 import {
   createUserRoute,
@@ -14,16 +12,15 @@ import {
 
 function registerUserReadRoutes(
   app: OpenAPIHono<HttpEnvironment>,
-  dependencies: AppDependencies,
-  options: AppOptions,
+  dependencies: UserRouteDependencies,
 ): void {
   app.openapi(createUserRoute, async (c) => {
     const db = c.get("db");
-    const repository = (options.userRepositoryFactory ?? DynamoUserRepository).create(db.users);
+    const repository = dependencies.userRepositoryFactory.create(db.users);
     const input = c.req.valid("json");
     return c.json(
       PublicUserSchema.parse(
-        await (options.userService ?? UserService).register(
+        await dependencies.userService.register(
           repository,
           dependencies.passwordHasher,
           input.name,
@@ -36,11 +33,8 @@ function registerUserReadRoutes(
   });
   app.openapi(getUserRoute, async (c) => {
     const db = c.get("db");
-    const repository = (options.userRepositoryFactory ?? DynamoUserRepository).create(db.users);
-    const user = await (options.userService ?? UserService).find(
-      repository,
-      c.req.valid("param").id,
-    );
+    const repository = dependencies.userRepositoryFactory.create(db.users);
+    const user = await dependencies.userService.find(repository, c.req.valid("param").id);
     return user
       ? c.json(PublicUserSchema.parse(user), 200)
       : c.json({ error: "見つかりません" }, 404);
@@ -49,13 +43,12 @@ function registerUserReadRoutes(
 
 function registerUserMutationRoutes(
   app: OpenAPIHono<HttpEnvironment>,
-  dependencies: AppDependencies,
-  options: AppOptions,
+  dependencies: UserRouteDependencies,
 ): void {
   app.openapi(renameRoute, async (c) => {
     const db = c.get("db");
-    const repository = (options.userRepositoryFactory ?? DynamoUserRepository).create(db.users);
-    const user = await (options.userService ?? UserService).rename(
+    const repository = dependencies.userRepositoryFactory.create(db.users);
+    const user = await dependencies.userService.rename(
       repository,
       c.req.valid("param").id,
       c.req.valid("json").name,
@@ -66,8 +59,8 @@ function registerUserMutationRoutes(
   });
   app.openapi(changeEmailRoute, async (c) => {
     const db = c.get("db");
-    const repository = (options.userRepositoryFactory ?? DynamoUserRepository).create(db.users);
-    const user = await (options.userService ?? UserService).changeEmail(
+    const repository = dependencies.userRepositoryFactory.create(db.users);
+    const user = await dependencies.userService.changeEmail(
       repository,
       c.req.valid("param").id,
       c.req.valid("json").email,
@@ -78,9 +71,9 @@ function registerUserMutationRoutes(
   });
   app.openapi(changePasswordRoute, async (c) => {
     const db = c.get("db");
-    const repository = (options.userRepositoryFactory ?? DynamoUserRepository).create(db.users);
+    const repository = dependencies.userRepositoryFactory.create(db.users);
     const input = c.req.valid("json");
-    const user = await (options.userService ?? UserService).changePassword(
+    const user = await dependencies.userService.changePassword(
       repository,
       dependencies.passwordHasher,
       c.req.valid("param").id,
@@ -96,9 +89,8 @@ function registerUserMutationRoutes(
 // ルート登録時にユースケースを明示的に受け取り、HTTPコンテキストをドメインへ渡さない。
 export function registerUserRoutes(
   app: OpenAPIHono<HttpEnvironment>,
-  dependencies: AppDependencies,
-  options: AppOptions = {},
+  dependencies: UserRouteDependencies,
 ): void {
-  registerUserReadRoutes(app, dependencies, options);
-  registerUserMutationRoutes(app, dependencies, options);
+  registerUserReadRoutes(app, dependencies);
+  registerUserMutationRoutes(app, dependencies);
 }

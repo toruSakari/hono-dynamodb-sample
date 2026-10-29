@@ -20,3 +20,15 @@ export type AppOptions = Readonly<{
   userService?: UserService;
   orderService?: OrderService;
 }>;
+
+// コントローラーには組立時に確定した依存だけを渡す。dbはContextから取得する。
+export type UserRouteDependencies = Readonly<{
+  userRepositoryFactory: typeof DynamoUserRepository;
+  userService: UserService;
+  passwordHasher: PasswordHasher;
+}>;
+export type OrderRouteDependencies = Readonly<{
+  userRepositoryFactory: typeof DynamoUserRepository;
+  orderRepositoryFactory: typeof DynamoOrderRepository;
+  orderService: OrderService;
+}>;

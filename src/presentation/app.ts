@@ -1,3 +1,7 @@
+import { DynamoUserRepository } from "../infrastructure/dynamodb/repositories/user-repository.js";
+import { DynamoOrderRepository } from "../infrastructure/dynamodb/repositories/order-repository.js";
+import { UserService } from "../application/use-cases/user-service.js";
+import { OrderService } from "../application/use-cases/order-service.js";
 import { randomUUID } from "node:crypto";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { bodyLimit } from "hono/body-limit";
@@ -43,8 +47,19 @@ export function createApp(
   );
   app.use("*", dbContext(dependencies.db));
   app.openapi(healthRoute, (c) => c.json({ status: "ok" as const }, 200));
-  registerUserRoutes(app, dependencies, options);
-  registerOrderRoutes(app, options);
+  // 差し替え/既定実装の選択は組立時だけ。ハンドラーにoptionsを持ち込まない。
+  const userRepositoryFactory = options.userRepositoryFactory ?? DynamoUserRepository;
+  const orderRepositoryFactory = options.orderRepositoryFactory ?? DynamoOrderRepository;
+  registerUserRoutes(app, {
+    userRepositoryFactory,
+    userService: options.userService ?? UserService,
+    passwordHasher: dependencies.passwordHasher,
+  });
+  registerOrderRoutes(app, {
+    userRepositoryFactory,
+    orderRepositoryFactory,
+    orderService: options.orderService ?? OrderService,
+  });
   registerDocumentationRoutes(app);
   app.notFound((c) => c.json({ error: "見つかりません" }, 404));
   app.onError(errorHandler);

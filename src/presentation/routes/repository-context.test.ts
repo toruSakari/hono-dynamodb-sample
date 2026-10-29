@@ -86,3 +86,48 @@ void test("controllerはContext内の該当モデルだけをfactoryへ渡し、
     orderCreate: 1,
   });
 });
+
+void test("差し替え依存はアプリ組立時に一度だけ選択し、リクエストごとにoptionsを読み直さない", async () => {
+  const db = createTestDatabase();
+  const users = MemoryUserRepository.create();
+  const orders = MemoryOrderRepository.create();
+  const reads = { userFactory: 0, orderFactory: 0, userService: 0, orderService: 0 };
+  const userFactory = {
+    create(): UserRepository {
+      return users;
+    },
+  };
+  const orderFactory = {
+    create(): OrderRepository {
+      return orders;
+    },
+  };
+  const app = createApp(
+    { db, passwordHasher },
+    {
+      get userRepositoryFactory(): typeof userFactory {
+        reads.userFactory += 1;
+        return userFactory;
+      },
+      get orderRepositoryFactory(): typeof orderFactory {
+        reads.orderFactory += 1;
+        return orderFactory;
+      },
+      get userService(): typeof UserService {
+        reads.userService += 1;
+        return UserService;
+      },
+      get orderService(): typeof OrderService {
+        reads.orderService += 1;
+        return OrderService;
+      },
+    },
+  );
+  const expected = { userFactory: 1, orderFactory: 1, userService: 1, orderService: 1 };
+  assert.deepEqual(reads, expected);
+  const id = "00000000-0000-4000-8000-000000000000";
+  for (const path of ["/users/" + id, "/orders/" + id, "/users/" + id]) {
+    assert.equal((await app.request(path)).status, 404);
+  }
+  assert.deepEqual(reads, expected);
+});

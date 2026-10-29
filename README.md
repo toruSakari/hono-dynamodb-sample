@@ -379,3 +379,7 @@ const user = await UserService.rename(repository, userId, validatedName);
 `MemoryUserRepository.create()` / `MemoryOrderRepository.create()` も同じ構造ですが、呼び出すたびに独立したMapを生成します。サービスは直接オブジェクト方式のままで、生成済みRepositoryを引数で受け取ります。
 
 DBモデルは起動時に生成して共有し、リクエストごとにDB接続を作り直しません。Repositoryは各コントローラーで軽量な操作オブジェクトとして組み立てます。Contextへの設定は認証やテナント分離ではありません。
+
+### optionsはアプリ組立時だけ使う
+
+`AppOptions` はテスト用の差し替え口です。`createApp` が既定値を一度だけ選び、User/Orderコントローラーには必要な確定済み依存だけを渡します。各ハンドラーは `options.xxx ?? 既定実装` を繰り返さず、ContextからDBを取得→Repository生成→Service呼び出しに集中します。
