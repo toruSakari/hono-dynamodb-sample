@@ -31,7 +31,7 @@ const StoredUserSchema = z.strictObject({
   version: AggregateVersionSchema,
 });
 export type StoredUser = Readonly<z.infer<typeof StoredUserSchema>>;
-// 公開項目は許可リスト。z.objectは未知項目（passwordHash等）を取り除く。
+// 公開項目は許可リスト。z.objectは未知項目（passwordやpasswordHash等）を取り除く。
 // readonlyで型と実行時の両方を凍結し、保存スキーマとは分離する。
 export const PublicUserSchema = z
   .object({
@@ -56,11 +56,16 @@ export type User = Readonly<{
   ): Promise<User>;
   verifyPassword(candidate: PasswordCandidate, hasher: PasswordHasher): Promise<boolean>;
 }>;
-const persistence = new WeakMap<User, StoredUser>();
+// 内部状態は振る舞いを持つ Password を保持する。保存用ハッシュとの二重保持はしない。
+type UserState = Readonly<Omit<StoredUser, "passwordHash"> & { password: Password }>;
+const states = new WeakMap<User, UserState>();
 
-function build(input: unknown): User {
-  const state = Object.freeze(StoredUserSchema.parse(input));
-  const password = Password.restore(state.passwordHash);
+// 入力は生成・復元・各ドメイン操作で検証済み。更新時もバージョン上限を保証する。
+function build(input: UserState): User {
+  const state: UserState = Object.freeze({
+    ...input,
+    version: AggregateVersionSchema.parse(input.version),
+  });
   const requireActive = (): void => {
     if (state.status !== "active") {
       throw new DomainRuleError("無効なユーザーは変更できません");
@@ -104,23 +109,23 @@ function build(input: unknown): User {
       hasher: PasswordHasher,
     ): Promise<User> {
       requireActive();
-      if (!(await password.matches(current, hasher))) {
+      if (!(await state.password.matches(current, hasher))) {
         throw new InvalidCurrentPasswordError("現在のパスワードが一致しません");
       }
       const replacement = await Password.create(next, hasher);
       return build({
         ...state,
-        passwordHash: Password.toPersistenceSnapshot(replacement),
+        password: replacement,
         version: state.version + 1,
       });
     },
     // 無効ユーザーは、正しいパスワードでも認証可能と判定しない。
     async verifyPassword(candidate: PasswordCandidate, hasher: PasswordHasher): Promise<boolean> {
       const valid = PasswordCandidateSchema.parse(candidate);
-      return state.status === "active" && (await password.matches(valid, hasher));
+      return state.status === "active" && (await state.password.matches(valid, hasher));
     },
   });
-  persistence.set(user, state);
+  states.set(user, state);
   return user;
 }
 
@@ -142,22 +147,38 @@ export const User = Object.freeze({
       name: validName,
       email: validEmail,
       status: ActiveUserStatus,
-      passwordHash: Password.toPersistenceSnapshot(secret),
+      password: secret,
       version: 0,
     });
   },
 
   // DB の unknown を検証して復元する。保存済みハッシュを再ハッシュしない。
   restore(record: unknown): User {
-    return build(record);
+    const stored = StoredUserSchema.parse(record);
+    return build({
+      id: stored.id,
+      name: stored.name,
+      email: stored.email,
+      status: stored.status,
+      version: stored.version,
+      password: Password.restore(stored.passwordHash),
+    });
   },
 
   // リポジトリ専用。公開 snapshot() と混同せず、HTTP 応答・ログに使用しない。
   toPersistenceSnapshot(user: User): StoredUser {
-    const state = persistence.get(user);
+    const state = states.get(user);
     if (!state) {
       throw new TypeError("正規の User エンティティではありません");
     }
-    return Object.freeze({ ...state });
+    // 保存境界でだけ Password をハッシュへ変換し、内部オブジェクトは持ち出さない。
+    return Object.freeze({
+      id: state.id,
+      name: state.name,
+      email: state.email,
+      status: state.status,
+      version: state.version,
+      passwordHash: Password.toPersistenceSnapshot(state.password),
+    });
   },
 });

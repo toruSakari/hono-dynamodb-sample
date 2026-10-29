@@ -85,7 +85,7 @@ vite.config.ts                  Vite+のformat / 型付きlint設定
 - **値オブジェクト**: それぞれ独立ファイルで検証済みブランド型を定義します。`Password` はさらに、非公開ハッシュと `matches()` を持つ凍結した操作オブジェクトです。ソルト付きハッシュの単純比較をパスワードの等価判定には使いません。
 - **境界検証**: HTTP の unknown を Zod で検証してからユースケース・集約に渡します。ブランド型は実行時の防御ではないため、生成・復元時にも検証します。
 - **不変更新**: `user.rename(name)` は同じ ID の新しい User を返し、元を変更しません。保存はユースケースがリポジトリに依頼します。
-- **閉じた状態**: 状態はクロージャ、外部には `Object.freeze` した操作オブジェクトだけを渡します。Userの状態はプリミティブですが、Orderの明細には配列と子があるため、防御的コピーと深い凍結を行います。
+- **閉じた状態**: 状態はクロージャ、外部には `Object.freeze` した操作オブジェクトだけを渡します。Orderはstate.linesに凍結した子エンティティを持ち、配列も防御的コピーして凍結します。実行中の状態と保存レコードを分け、公開時と保存時だけそれぞれのスナップショットへ変換します。
 - **Repository**: DTO ではなく集約を受け取り、取得時も集約を返します。DB の生レコードを `User.restore(unknown)` で検証し直します。
 - **並行更新**: 読み込んだ version を条件に保存し、競合を検出します。1回の更新は1回のドメイン操作を想定します。HTTP クライアントの長時間保持した古い画面に対する ETag / If-Match は未実装です。
 - この規模ではドメインイベント、Unit of Work、複数集約のトランザクションなどは不要なため省略しています。
@@ -353,7 +353,7 @@ OpenAPI 公式参考:
 - User / Order と公開DTOのversion制約は `AggregateVersionSchema` を共有します。
 - DynamoDB Repositoryの共通部分は、同じディレクトリの `repository-support.ts` にまとめています。version遷移検証・条件不一致の例外変換・raw応答形式だけが対象です。
 - `create` / 条件付き `put` は各Repositoryに残し、モデルの型やOrder専用のサイズ制限をその場で読めるようにしています。
-- Entityの基底クラスや汎用factoryは作りません。Userの状態ルール、Orderの明細整合性、Passwordの秘密状態は別々に保ちます。Orderの深い凍結は同じファイル内の関数で再利用します。
+- Entityの基底クラスや汎用factoryは作りません。Userの状態ルール、Orderの明細整合性、Passwordの秘密状態は別々に保ちます。Orderの子はstate.linesにまとめ、保存レコードと子エンティティの二重保持を避けます。
 
 ### Serviceは直接オブジェクトとして使う
 
@@ -384,3 +384,9 @@ DBモデルは起動時に生成して共有し、リクエストごとにDB接�
 ### optionsはアプリ組立時だけ使う
 
 `AppOptions` はテスト用の差し替え口です。`createApp` が既定値を一度だけ選び、User/Orderコントローラーには必要な確定済み依存だけを渡します。各ハンドラーは `options.xxx ?? 既定実装` を繰り返さず、ContextからDBを取得→Repository生成→Service呼び出しに集中します。
+
+### 集約の実行中stateと保存形式
+
+Orderの内部は `state.lines: readonly OrderLine[]` とし、別のlines変数を持ちません。追加・変更・削除はエンティティ配列のまま新しいstateを組み立てます。`restore` でunknownを保存スキーマ検証して子を復元し、`toPersistenceSnapshot` で保存用のプレーンなレコードへ変換します。公開snapshotは引き続き許可リストスキーマで検証・凍結します。
+
+Userも同様に `state.password: Password` へまとめ、別変数との二重保持を避けています。生のハッシュ文字列は保存境界でのみ取り出し、公開snapshotではpassword自体も除去します。OrderLineとPasswordは既に単一stateのため、不要な汎用化はしていません。

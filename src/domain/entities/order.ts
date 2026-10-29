@@ -64,19 +64,16 @@ export type Order = Readonly<{
   removeLine(lineId: OrderLineId): Order;
   confirm(): Order;
 }>;
-const persistence = new WeakMap<Order, StoredOrder>();
+// 実行中の集約は子エンティティをstate内に持つ。保存レコードとは型を分ける。
+type OrderState = Readonly<Omit<StoredOrder, "lines"> & { lines: readonly OrderLine[] }>;
+const states = new WeakMap<Order, OrderState>();
 
-// 集約内と保存用コピーで同じ凍結規則を使い、明細配列の参照も外部と共有しない。
-function freezeStoredOrder(record: StoredOrder): StoredOrder {
-  return Object.freeze({
-    ...record,
-    lines: Object.freeze(record.lines.map((line) => Object.freeze({ ...line }))),
+function build(input: OrderState): Order {
+  const state: OrderState = Object.freeze({
+    ...input,
+    version: AggregateVersionSchema.parse(input.version),
+    lines: Object.freeze([...input.lines]),
   });
-}
-
-function build(input: unknown): Order {
-  const state = freezeStoredOrder(StoredOrderSchema.parse(input));
-  const lines = Object.freeze(state.lines.map((line) => OrderLine.restore(line)));
   const requireDraft = (): void => {
     if (state.status !== "draft") {
       throw new DomainRuleError("確定した注文は変更できません");
@@ -84,7 +81,7 @@ function build(input: unknown): Order {
   };
   const requireLine = (inputId: OrderLineId): OrderLine => {
     const id = OrderLineIdSchema.parse(inputId);
-    const line = lines.find((candidate) => candidate.snapshot().id === id);
+    const line = state.lines.find((candidate) => candidate.snapshot().id === id);
     if (!line) {
       throw new DomainRuleError("注文内に対象の明細がありません");
     }
@@ -93,7 +90,7 @@ function build(input: unknown): Order {
   const order = Object.freeze<Order>({
     // 子の操作オブジェクトは渡さず、深く凍結した公開スナップショットだけを返す。
     snapshot(): PublicOrder {
-      const snapshots = lines.map((line) => line.snapshot());
+      const snapshots = state.lines.map((line) => line.snapshot());
       return PublicOrderSchema.parse({
         ...state,
         lines: snapshots,
@@ -104,17 +101,17 @@ function build(input: unknown): Order {
     addLine(productCode: ProductCode, unitPriceYen: UnitPriceYen, quantity: Quantity): Order {
       requireDraft();
       const validCode = ProductCodeSchema.parse(productCode);
-      if (lines.length >= 20) {
+      if (state.lines.length >= 20) {
         throw new DomainRuleError("注文は20明細までです");
       }
-      if (lines.some((line) => line.snapshot().productCode === validCode)) {
+      if (state.lines.some((line) => line.snapshot().productCode === validCode)) {
         throw new DomainRuleError("同じ商品は数量変更で更新してください");
       }
       const added = OrderLine.create(validCode, unitPriceYen, quantity);
       return build({
         ...state,
         version: state.version + 1,
-        lines: [...state.lines, OrderLine.toPersistenceSnapshot(added)],
+        lines: [...state.lines, added],
       });
     },
     // 所属を確認してから子の振る舞いを呼ぶ。変更された子も新しい注文にだけ所属する。
@@ -125,9 +122,7 @@ function build(input: unknown): Order {
       return build({
         ...state,
         version: state.version + 1,
-        lines: lines.map((line) =>
-          OrderLine.toPersistenceSnapshot(line === existing ? changed : line),
-        ),
+        lines: state.lines.map((line) => (line === existing ? changed : line)),
       });
     },
     // 明細の削除もルートを経由し、確定後の変更を一律に拒否する。
@@ -137,21 +132,19 @@ function build(input: unknown): Order {
       return build({
         ...state,
         version: state.version + 1,
-        lines: lines
-          .filter((line) => line !== existing)
-          .map((line) => OrderLine.toPersistenceSnapshot(line)),
+        lines: state.lines.filter((line) => line !== existing),
       });
     },
     // 注文全体に対する確定。空注文は不可で、確定後は子の数量も変更できない。
     confirm(): Order {
       requireDraft();
-      if (lines.length === 0) {
+      if (state.lines.length === 0) {
         throw new DomainRuleError("空の注文は確定できません");
       }
       return build({ ...state, status: ConfirmedOrderStatus, version: state.version + 1 });
     },
   });
-  persistence.set(order, state);
+  states.set(order, state);
   return order;
 }
 
@@ -167,13 +160,18 @@ export const Order = Object.freeze({
     });
   },
   restore(record: unknown): Order {
-    return build(record);
+    // DB境界では明細形式だけでなく、重複・上限・確定条件も再検証する。
+    const stored = StoredOrderSchema.parse(record);
+    return build({ ...stored, lines: stored.lines.map((line) => OrderLine.restore(line)) });
   },
   toPersistenceSnapshot(order: Order): StoredOrder {
-    const state = persistence.get(order);
+    const state = states.get(order);
     if (!state) {
       throw new TypeError("正規の Order 集約ではありません");
     }
-    return freezeStoredOrder(state);
+    return Object.freeze({
+      ...state,
+      lines: Object.freeze(state.lines.map((line) => OrderLine.toPersistenceSnapshot(line))),
+    });
   },
 });

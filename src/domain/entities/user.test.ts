@@ -158,3 +158,42 @@ void test("公開スキーマはstateの秘密・未知項目を除去し、snap
   assert(!JSON.stringify(user.snapshot()).includes(stored.passwordHash));
   assert.throws(() => PublicUserSchema.parse({ ...stored, name: "" }));
 });
+
+void test("内部 Password を公開・保存 DTO に漏らさず、プロフィール変更で同じハッシュを保つ", async () => {
+  const user = await User.create(name, password, passwordHasher);
+  const originalRecord = User.toPersistenceSnapshot(user);
+  const changed = user
+    .rename(UserNameSchema.parse("変更後"))
+    .changeEmail(EmailAddressSchema.parse("changed@example.com"))
+    .disable()
+    .reactivate();
+  const record = User.toPersistenceSnapshot(changed);
+  assert.deepEqual(Object.keys(record).sort(), [
+    "email",
+    "id",
+    "name",
+    "passwordHash",
+    "status",
+    "version",
+  ]);
+  assert.equal("password" in changed.snapshot(), false);
+  assert.equal("password" in record, false);
+  assert.equal(record.passwordHash, originalRecord.passwordHash);
+  assert.equal(record.version, 4);
+  const restored = User.restore(record);
+  assert.deepEqual(restored.snapshot(), changed.snapshot());
+  assert(await restored.verifyPassword(PasswordCandidateSchema.parse(password), passwordHasher));
+  // 内部のPassword値オブジェクトをDB形式として受け入れない。
+  assert.throws(() => User.restore({ ...record, password: {} }));
+});
+
+void test("内部stateへ変更しても復元と更新のバージョン上限を維持する", async () => {
+  const user = await User.create(name, password, passwordHasher);
+  const record = User.toPersistenceSnapshot(user);
+  const lastVersion = User.restore({ ...record, version: Number.MAX_SAFE_INTEGER - 1 });
+  assert.equal(lastVersion.snapshot().version, Number.MAX_SAFE_INTEGER - 1);
+  assert.throws(() => lastVersion.rename(name));
+  assert.throws(() => lastVersion.changeEmail(EmailAddressSchema.parse("demo@example.com")));
+  assert.throws(() => lastVersion.disable());
+  assert.throws(() => User.restore({ ...record, version: Number.MAX_SAFE_INTEGER }));
+});

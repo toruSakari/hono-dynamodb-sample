@@ -165,3 +165,29 @@ void test("公開注文スキーマはルートと子の未知項目を除去し
   assert.equal(projected.lines[0]?.quantity, quantity);
   assert.equal(projected.totalYen, 2400);
 });
+
+void test("state内の子エンティティは保存境界だけでレコード化し、復元後も不変更新できる", () => {
+  const original = Order.create(customerId).addLine(code, price, quantity);
+  const record = Order.toPersistenceSnapshot(original);
+  const storedLine = record.lines[0];
+  assert(storedLine);
+  assert.deepEqual(Object.keys(storedLine).sort(), [
+    "id",
+    "productCode",
+    "quantity",
+    "unitPriceYen",
+  ]);
+  const restored = Order.restore(record);
+  const changed = restored.changeQuantity(storedLine.id, QuantitySchema.parse(3));
+  const confirmed = changed.confirm();
+  assert.equal(original.snapshot().lines[0]?.quantity, 2);
+  assert.equal(restored.snapshot().lines[0]?.quantity, 2);
+  assert.equal(confirmed.snapshot().totalYen, 3600);
+  assert.deepEqual(
+    Order.restore(Order.toPersistenceSnapshot(confirmed)).snapshot(),
+    confirmed.snapshot(),
+  );
+  assert.throws(() => confirmed.removeLine(storedLine.id), DomainRuleError);
+  const lastVersion = Order.restore({ ...record, version: Number.MAX_SAFE_INTEGER - 1 });
+  assert.throws(() => lastVersion.confirm());
+});
