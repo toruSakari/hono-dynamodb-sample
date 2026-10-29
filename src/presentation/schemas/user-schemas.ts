@@ -1,3 +1,4 @@
+import { AggregateVersionSchema } from "../../domain/value-objects/aggregate-version.js";
 import { z } from "@hono/zod-openapi";
 import {
   UserIdSchema,
@@ -25,7 +26,7 @@ export const PublicUserSchema = z
     name,
     email: z.union([email, z.null()]),
     status: UserStatusSchema,
-    version: z.number().int().nonnegative(),
+    version: AggregateVersionSchema,
   })
   .openapi("PublicUser");
 export const UserParamsSchema = z.object({

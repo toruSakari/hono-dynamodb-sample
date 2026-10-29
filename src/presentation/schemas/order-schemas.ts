@@ -1,3 +1,4 @@
+import { AggregateVersionSchema } from "../../domain/value-objects/aggregate-version.js";
 import { z } from "@hono/zod-openapi";
 import { UserIdSchema } from "../../domain/value-objects/user-id.js";
 import { OrderIdSchema } from "../../domain/value-objects/order-id.js";
@@ -22,7 +23,7 @@ export const PublicOrderSchema = z
     id: OrderIdSchema,
     customerId: UserIdSchema,
     status: OrderStatusSchema,
-    version: z.number().int().nonnegative(),
+    version: AggregateVersionSchema,
     lines: z.array(PublicOrderLineSchema).max(20),
     totalYen: z.number().int().min(0).max(1_980_000_000),
   })
@@ -44,7 +45,6 @@ export const ChangeOrderQuantitySchema = z
 export const OrderParamsSchema = z.object({
   id: OrderIdSchema.clone().openapi({ param: { name: "id", in: "path" } }),
 });
-export const OrderLineParamsSchema = z.object({
-  id: OrderIdSchema.clone().openapi({ param: { name: "id", in: "path" } }),
+export const OrderLineParamsSchema = OrderParamsSchema.extend({
   lineId: OrderLineIdSchema.clone().openapi({ param: { name: "lineId", in: "path" } }),
 });

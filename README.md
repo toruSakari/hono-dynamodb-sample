@@ -344,3 +344,10 @@ OpenAPI 公式参考:
 
 - [DynamoDBのアイテムサイズ制約](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Constraints.html)
 - [DynamoDBの条件付き書き込み](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/WorkingWithItems.html)
+
+### 読みやすさのための小さな共通化
+
+- User / Order と公開DTOのversion制約は `AggregateVersionSchema` を共有します。
+- DynamoDB Repositoryの共通部分は、同じディレクトリの `repository-support.ts` にまとめています。version遷移検証・条件不一致の例外変換・raw応答形式だけが対象です。
+- `create` / 条件付き `put` は各Repositoryに残し、モデルの型やOrder専用のサイズ制限をその場で読めるようにしています。
+- Entityの基底クラスや汎用factoryは作りません。Userの状態ルール、Orderの明細整合性、Passwordの秘密状態は別々に保ちます。Orderの深い凍結は同じファイル内の関数で再利用します。

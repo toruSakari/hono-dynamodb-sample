@@ -1,10 +1,9 @@
+import { ConditionalWrite, RawGetResultSchema } from "./repository-support.js";
 import type { OrderId } from "../../../domain/value-objects/order-id.js";
-import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { z } from "zod";
 import { Order } from "../../../domain/entities/order.js";
 import type { OrderRepository } from "../../../domain/repositories/order-repository.js";
-import { ConflictError } from "../../../domain/errors/conflict-error.js";
 import { DomainRuleError } from "../../../domain/errors/domain-rule-error.js";
 import { createOrderModel } from "../models/order-model.js";
 
@@ -34,9 +33,7 @@ export function createOrderRepository(
         quantity: line.quantity,
       })),
     };
-    if (expectedVersion === undefined ? item.version !== 0 : item.version !== expectedVersion + 1) {
-      throw new ConflictError("不正なバージョン遷移です");
-    }
+    ConditionalWrite.requireNextVersion(item.version, expectedVersion);
     // 20明細＋短いASCII識別子の業務制限に加え、将来の変更時にも巨大化を防ぐ。
     // 32KiBのJSON上限は400KBのDynamoDB上限より十分小さく、正確な課金サイズ計算ではない。
     if (Buffer.byteLength(JSON.stringify(item), "utf8") > 32 * 1024) {
@@ -52,11 +49,7 @@ export function createOrderRepository(
           .go({ originalErr: true });
       }
     } catch (error) {
-      // 競合は呼び出し側に返す。古い読み取りに基づく業務判断を自動でやり直さない。
-      if (error instanceof ConditionalCheckFailedException) {
-        throw new ConflictError("注文の更新が競合しました");
-      }
-      throw error;
+      ConditionalWrite.rethrow(error, "注文の更新が競合しました");
     }
   }
   return Object.freeze<OrderRepository>({
@@ -64,7 +57,7 @@ export function createOrderRepository(
       const raw: unknown = await model
         .get({ id })
         .go({ data: "raw", consistent: true, originalErr: true });
-      const result = z.object({ data: z.object({ Item: z.unknown().optional() }) }).parse(raw).data;
+      const result = RawGetResultSchema.parse(raw).data;
       if (!result.Item) {
         return null;
       }

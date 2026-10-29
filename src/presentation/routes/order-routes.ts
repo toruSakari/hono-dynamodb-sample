@@ -12,6 +12,7 @@ import {
   jsonBody as body,
   errorResponse,
   commonErrors as baseErrors,
+  bodyErrors as baseBodyErrors,
 } from "./responses.js";
 const commonErrors = {
   ...baseErrors,
@@ -20,7 +21,7 @@ const commonErrors = {
 };
 const bodyErrors = {
   ...commonErrors,
-  415: errorResponse("Content-Typeはapplication/jsonを指定してください"),
+  415: baseBodyErrors[415],
 };
 
 export const createOrderRoute = createRoute({

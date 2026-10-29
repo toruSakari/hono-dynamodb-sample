@@ -1,8 +1,7 @@
+import { ConditionalWrite, RawGetResultSchema } from "./repository-support.js";
 import type { UserId } from "../../../domain/value-objects/user-id.js";
-import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { z } from "zod";
-import { ConflictError } from "../../../domain/errors/conflict-error.js";
 import type { UserRepository } from "../../../domain/repositories/user-repository.js";
 import { User } from "../../../domain/entities/user.js";
 import { createUserModel } from "../models/user-model.js";
@@ -32,9 +31,7 @@ export function createUserRepository(
       version: state.version,
       ...(state.email === null ? {} : { email: state.email }),
     };
-    if (expectedVersion === undefined ? item.version !== 0 : item.version !== expectedVersion + 1) {
-      throw new ConflictError("不正なバージョン遷移です");
-    }
+    ConditionalWrite.requireNextVersion(item.version, expectedVersion);
     try {
       if (expectedVersion === undefined) {
         // create は attribute_not_exists を付加し、既存レコードを上書きしない。
@@ -47,10 +44,7 @@ export function createUserRepository(
           .go({ originalErr: true });
       }
     } catch (error) {
-      if (error instanceof ConditionalCheckFailedException) {
-        throw new ConflictError("競合しました");
-      }
-      throw error;
+      ConditionalWrite.rethrow(error, "競合しました");
     }
   }
   return Object.freeze<UserRepository>({
@@ -59,7 +53,7 @@ export function createUserRepository(
       const raw: unknown = await model
         .get({ id })
         .go({ data: "raw", consistent: true, originalErr: true });
-      const result = z.object({ data: z.object({ Item: z.unknown().optional() }) }).parse(raw).data;
+      const result = RawGetResultSchema.parse(raw).data;
       if (!result.Item) {
         return null;
       }

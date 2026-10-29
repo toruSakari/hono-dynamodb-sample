@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { AggregateVersionSchema } from "../value-objects/aggregate-version.js";
 import { DomainRuleError } from "../errors/domain-rule-error.js";
 import { UserIdSchema } from "../value-objects/user-id.js";
 import type { UserId } from "../value-objects/user-id.js";
@@ -24,11 +25,7 @@ const StoredOrderSchema = z
     id: OrderIdSchema,
     customerId: UserIdSchema,
     status: OrderStatusSchema,
-    version: z
-      .number()
-      .int()
-      .nonnegative()
-      .max(Number.MAX_SAFE_INTEGER - 1),
+    version: AggregateVersionSchema,
     lines: z.array(StoredOrderLineSchema).max(20),
   })
   .superRefine((order, context) => {
@@ -63,12 +60,16 @@ export type Order = Readonly<{
 }>;
 const persistence = new WeakMap<Order, StoredOrder>();
 
-function build(input: unknown): Order {
-  const parsed = StoredOrderSchema.parse(input);
-  const state: StoredOrder = Object.freeze({
-    ...parsed,
-    lines: Object.freeze(parsed.lines.map((line) => Object.freeze({ ...line }))),
+// 集約内と保存用コピーで同じ凍結規則を使い、明細配列の参照も外部と共有しない。
+function freezeStoredOrder(record: StoredOrder): StoredOrder {
+  return Object.freeze({
+    ...record,
+    lines: Object.freeze(record.lines.map((line) => Object.freeze({ ...line }))),
   });
+}
+
+function build(input: unknown): Order {
+  const state = freezeStoredOrder(StoredOrderSchema.parse(input));
   const lines = Object.freeze(state.lines.map((line) => OrderLine.restore(line)));
   const requireDraft = (): void => {
     if (state.status !== "draft") {
@@ -170,9 +171,6 @@ export const Order = Object.freeze({
     if (!state) {
       throw new TypeError("正規の Order 集約ではありません");
     }
-    return Object.freeze({
-      ...state,
-      lines: Object.freeze(state.lines.map((line) => Object.freeze({ ...line }))),
-    });
+    return freezeStoredOrder(state);
   },
 });

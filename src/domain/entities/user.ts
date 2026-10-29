@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { AggregateVersionSchema } from "../value-objects/aggregate-version.js";
 import {
   UserIdSchema,
   UserNameSchema,
@@ -27,11 +28,7 @@ const StoredUserSchema = z.strictObject({
   // 初版の保存レコードを復元できるよう、省略時だけ既定値を適用する。
   email: EmailAddressSchema.nullable().default(null),
   status: UserStatusSchema.default(ActiveUserStatus),
-  version: z
-    .number()
-    .int()
-    .nonnegative()
-    .max(Number.MAX_SAFE_INTEGER - 1),
+  version: AggregateVersionSchema,
 });
 export type StoredUser = Readonly<z.infer<typeof StoredUserSchema>>;
 // 公開項目を許可リストで選ぶ。保存型に秘密情報が増えても自動公開されない。
@@ -51,7 +48,7 @@ export type User = Readonly<{
 }>;
 const persistence = new WeakMap<User, StoredUser>();
 
-function build(input: StoredUser): User {
+function build(input: unknown): User {
   const state = Object.freeze(StoredUserSchema.parse(input));
   const password = Password.restore(state.passwordHash);
   const requireActive = (): void => {
@@ -148,7 +145,7 @@ export const User = Object.freeze({
 
   // DB の unknown を検証して復元する。保存済みハッシュを再ハッシュしない。
   restore(record: unknown): User {
-    return build(StoredUserSchema.parse(record));
+    return build(record);
   },
 
   // リポジトリ専用。公開 snapshot() と混同せず、HTTP 応答・ログに使用しない。
