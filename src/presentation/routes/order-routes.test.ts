@@ -5,8 +5,8 @@ import { readJson, readPath } from "../testing/http-test-helpers.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createApp } from "../app.js";
-import { createMemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
-import { createMemoryOrderRepository } from "../../testing/repositories/memory-order-repository.js";
+import { MemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
+import { MemoryOrderRepository } from "../../testing/repositories/memory-order-repository.js";
 import { passwordHasher } from "../../infrastructure/security/argon2-password-hasher.js";
 import { UserIdSchema } from "../../domain/value-objects/user-id.js";
 import { ConflictError } from "../../domain/errors/conflict-error.js";
@@ -23,8 +23,8 @@ function setup(): {
   orders: OrderRepository;
   app: ReturnType<typeof createApp>;
 } {
-  const users = createMemoryUserRepository();
-  const orders = createMemoryOrderRepository();
+  const users = MemoryUserRepository.create();
+  const orders = MemoryOrderRepository.create();
   return {
     users,
     orders,
@@ -147,8 +147,8 @@ void test("Order APIは不正入力・顧客未存在/無効・明細重複・�
 });
 
 void test("注文Repositoryの競合は409として返し、自動リトライしない", async () => {
-  const users = createMemoryUserRepository();
-  const orders = createMemoryOrderRepository();
+  const users = MemoryUserRepository.create();
+  const orders = MemoryOrderRepository.create();
   let writes = 0;
   const app = createApp({
     userRepository: users,

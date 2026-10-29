@@ -5,7 +5,7 @@ import { User } from "../../domain/entities/user.js";
 import type { StoredUser } from "../../domain/entities/user.js";
 
 // テスト用アダプターもスナップショットで保存し、毎回エンティティに復元する。
-export function createMemoryUserRepository(): UserRepository {
+function build(): UserRepository {
   const records = new Map<string, StoredUser>();
   return Object.freeze<UserRepository>({
     async findById(id: UserId): Promise<User | null> {
@@ -30,3 +30,10 @@ export function createMemoryUserRepository(): UserRepository {
     },
   });
 }
+
+// 呼び出すたびにbuild内で独立したMapを生成し、テスト間で状態を共有しない。
+export const MemoryUserRepository = Object.freeze({
+  create(): UserRepository {
+    return build();
+  },
+});

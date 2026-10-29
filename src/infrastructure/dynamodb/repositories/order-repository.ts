@@ -1,6 +1,6 @@
 import { ConditionalWrite, RawGetResultSchema } from "./repository-support.js";
 import type { OrderId } from "../../../domain/value-objects/order-id.js";
-import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import type { DynamoRepositoryContext } from "./repository-support.js";
 import { z } from "zod";
 import { Order } from "../../../domain/entities/order.js";
 import type { OrderRepository } from "../../../domain/repositories/order-repository.js";
@@ -14,11 +14,8 @@ const MetadataSchema = z
   })
   .passthrough();
 
-export function createOrderRepository(
-  client: DynamoDBDocumentClient,
-  tableName: string,
-): OrderRepository {
-  const model = createOrderModel(client, tableName);
+function build(context: DynamoRepositoryContext): OrderRepository {
+  const model = createOrderModel(context.client, context.tableName);
   async function write(order: Order, expectedVersion?: number): Promise<void> {
     const snapshot = Order.toPersistenceSnapshot(order);
     const item = {
@@ -78,3 +75,10 @@ export function createOrderRepository(
     },
   });
 }
+
+// DB接続の詳細は生成時に閉じ込め、ユースケースへはRepository契約だけを渡す。
+export const DynamoOrderRepository = Object.freeze({
+  create(context: DynamoRepositoryContext): OrderRepository {
+    return build(context);
+  },
+});

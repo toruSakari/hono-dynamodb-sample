@@ -3,8 +3,8 @@ import { test } from "node:test";
 import type { OrderRepository } from "../../domain/repositories/order-repository.js";
 import { OrderService } from "./order-service.js";
 import { UserService } from "./user-service.js";
-import { createMemoryOrderRepository } from "../../testing/repositories/memory-order-repository.js";
-import { createMemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
+import { MemoryOrderRepository } from "../../testing/repositories/memory-order-repository.js";
+import { MemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
 import { passwordHasher } from "../../infrastructure/security/argon2-password-hasher.js";
 import { UserNameSchema } from "../../domain/value-objects/user-name.js";
 import { NewPasswordSchema } from "../../domain/value-objects/new-password.js";
@@ -16,8 +16,8 @@ import { ConflictError } from "../../domain/errors/conflict-error.js";
 import { DomainRuleError } from "../../domain/errors/domain-rule-error.js";
 
 void test("注文ユースケースは有効顧客の確認後だけ保存を行う", async () => {
-  const users = createMemoryUserRepository();
-  const orders = createMemoryOrderRepository();
+  const users = MemoryUserRepository.create();
+  const orders = MemoryOrderRepository.create();
   let inserts = 0;
   const repository: OrderRepository = {
     ...orders,
@@ -54,8 +54,8 @@ void test("注文ユースケースは有効顧客の確認後だけ保存を行
 });
 
 void test("並行ユースケースは読込versionを保存条件に渡し、競合側を勝手に再実行しない", async () => {
-  const users = createMemoryUserRepository();
-  const orders = createMemoryOrderRepository();
+  const users = MemoryUserRepository.create();
+  const orders = MemoryOrderRepository.create();
   const customer = await UserService.register(
     users,
     passwordHasher,

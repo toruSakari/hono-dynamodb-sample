@@ -156,8 +156,8 @@ const dto = restored.snapshot(); // HTTP に渡せる公開 DTO
   振る舞いのないVOを不要なオブジェクトで包みません。
 - `Password.create()` はハッシュ計算があるためasync、保存スナップショットはハッシュ文字列です。
   この意味のある違いは、他のオブジェクトと無理に同一化しません。
-- メモリ版Repositoryも凍結した直接メソッドで、命名は `createMemoryUserRepository` /
-  `createMemoryOrderRepository` に統一。テストは責務ごとに実装横へ置きます。
+- メモリ版Repositoryも凍結した直接メソッドで、命名は `MemoryUserRepository.create()` /
+  `MemoryOrderRepository.create()` に統一。テストは責務ごとに実装横へ置きます。
 
 ## パスワードと公開境界
 
@@ -362,3 +362,14 @@ const order = await OrderService.confirm(orderRepository, orderId);
 ```
 
 手動DIの組立場所は `bootstrap/server.ts` です。HTTP層は渡された依存をServiceへ渡すだけで、DynamoDBやハッシュ実装を生成しません。
+
+### Repositoryはcreate → buildで組み立てる
+
+```ts
+const repository = DynamoUserRepository.create({ client: documentClient, tableName });
+const user = await UserService.rename(repository, userId, validatedName);
+```
+
+`DynamoUserRepository` / `DynamoOrderRepository` の凍結した操作オブジェクトから `create` を呼ぶと、非公開の `build` がメソッド付きの凍結Repositoryを返します。DB contextはインフラの生成境界だけで扱い、返す値には公開しません。Hono Contextもユースケースへ渡しません。
+
+`MemoryUserRepository.create()` / `MemoryOrderRepository.create()` も同じ構造ですが、呼び出すたびに独立したMapを生成します。サービスは直接オブジェクト方式のままで、生成済みRepositoryを引数で受け取ります。

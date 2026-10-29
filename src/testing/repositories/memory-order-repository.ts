@@ -5,7 +5,7 @@ import type { OrderRepository } from "../../domain/repositories/order-repository
 import { ConflictError } from "../../domain/errors/conflict-error.js";
 
 // テストでも生の集約参照を共有せず、保存スナップショットから復元する。
-export function createMemoryOrderRepository(): OrderRepository {
+function build(): OrderRepository {
   const records = new Map<string, StoredOrder>();
   return Object.freeze<OrderRepository>({
     async findById(id: OrderId): Promise<Order | null> {
@@ -30,3 +30,10 @@ export function createMemoryOrderRepository(): OrderRepository {
     },
   });
 }
+
+// 呼び出すたびにbuild内で独立したMapを生成し、テスト間で状態を共有しない。
+export const MemoryOrderRepository = Object.freeze({
+  create(): OrderRepository {
+    return build();
+  },
+});

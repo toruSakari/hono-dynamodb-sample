@@ -1,18 +1,18 @@
 import { ErrorSchema } from "../schemas/common-schemas.js";
 import { readJson } from "../testing/http-test-helpers.js";
-import { createMemoryOrderRepository } from "../../testing/repositories/memory-order-repository.js";
+import { MemoryOrderRepository } from "../../testing/repositories/memory-order-repository.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createApp } from "../app.js";
 import { passwordHasher } from "../../infrastructure/security/argon2-password-hasher.js";
-import { createMemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
+import { MemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
 
 void test("手動DIした相関IDと時計を使い、成功・エラーにも安全な共通ヘッダを付ける", async () => {
-  const users = createMemoryUserRepository();
+  const users = MemoryUserRepository.create();
   let clock = 0;
   let id = 0;
   const app = createApp(
-    { userRepository: users, orderRepository: createMemoryOrderRepository(), passwordHasher },
+    { userRepository: users, orderRepository: MemoryOrderRepository.create(), passwordHasher },
     {
       contextDependencies: {
         newRequestId: (): string => "00000000-0000-4000-8000-" + String(++id).padStart(12, "0"),
@@ -55,7 +55,7 @@ void test("手動DIした相関IDと時計を使い、成功・エラーにも�
 });
 
 void test("下位層の例外も機密を漏らさず500と共通ヘッダに変換する", async () => {
-  const repository = createMemoryUserRepository();
+  const repository = MemoryUserRepository.create();
   const app = createApp({
     userRepository: {
       ...repository,
@@ -63,7 +63,7 @@ void test("下位層の例外も機密を漏らさず500と共通ヘッダに変
         throw new Error("do-not-expose-password-or-record");
       },
     },
-    orderRepository: createMemoryOrderRepository(),
+    orderRepository: MemoryOrderRepository.create(),
     passwordHasher,
   });
   const response = await app.request("/users/00000000-0000-4000-8000-000000000000");

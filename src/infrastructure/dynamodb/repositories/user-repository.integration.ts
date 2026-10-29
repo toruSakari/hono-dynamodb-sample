@@ -11,7 +11,7 @@ import {
 } from "../../../domain/value-objects/index.js";
 import { documentClient, rawClient, tableName } from "../client.js";
 import { passwordHasher } from "../../security/argon2-password-hasher.js";
-import { createUserRepository } from "./user-repository.js";
+import { DynamoUserRepository } from "./user-repository.js";
 
 void test(
   "ElectroDB + 実 DynamoDB: 集約操作・楽観ロック・旧形式互換・破損レコード拒否",
@@ -19,7 +19,13 @@ void test(
     skip: process.env.RUN_DYNAMODB_TESTS !== "1",
   },
   async () => {
-    const repository = createUserRepository(documentClient, tableName);
+    const repository = DynamoUserRepository.create({
+      client: documentClient,
+      tableName: tableName,
+    });
+    assert(Object.isFrozen(DynamoUserRepository));
+    assert(Object.isFrozen(repository));
+    assert.deepEqual(Object.keys(repository).sort(), ["findById", "insert", "update"]);
     const user = await User.create(
       UserNameSchema.parse("DB サンプル"),
       NewPasswordSchema.parse("demo-only-long-password"),

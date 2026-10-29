@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { User } from "../../domain/entities/user.js";
 import { UserService } from "./user-service.js";
 import type { UserRepository } from "../../domain/repositories/user-repository.js";
-import { createMemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
+import { MemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
 import { passwordHasher } from "../../infrastructure/security/argon2-password-hasher.js";
 import { UserNameSchema } from "../../domain/value-objects/user-name.js";
 import { NewPasswordSchema } from "../../domain/value-objects/new-password.js";
@@ -14,8 +14,8 @@ import { ConflictError } from "../../domain/errors/conflict-error.js";
 
 void test("直接UserServiceは渡されたRepositoryだけを使い、操作ごとに保存versionを進める", async () => {
   assert(Object.isFrozen(UserService));
-  const users = createMemoryUserRepository();
-  const otherUsers = createMemoryUserRepository();
+  const users = MemoryUserRepository.create();
+  const otherUsers = MemoryUserRepository.create();
   const created = await UserService.register(
     users,
     passwordHasher,
@@ -94,7 +94,7 @@ void test("各User操作は未存在なら保存せずnullを返す", async () =
 });
 
 void test("Userの保存競合は自動再試行せず呼び出し側へ返す", async () => {
-  const users = createMemoryUserRepository();
+  const users = MemoryUserRepository.create();
   const created = await UserService.register(
     users,
     passwordHasher,

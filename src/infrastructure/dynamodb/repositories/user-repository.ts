@@ -1,6 +1,6 @@
 import { ConditionalWrite, RawGetResultSchema } from "./repository-support.js";
 import type { UserId } from "../../../domain/value-objects/user-id.js";
-import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import type { DynamoRepositoryContext } from "./repository-support.js";
 import { z } from "zod";
 import type { UserRepository } from "../../../domain/repositories/user-repository.js";
 import { User } from "../../../domain/entities/user.js";
@@ -16,11 +16,8 @@ const MetadataSchema = z
   .passthrough()
   .refine((row) => (row.__edb_e__ === undefined) === (row.__edb_v__ === undefined));
 
-export function createUserRepository(
-  client: DynamoDBDocumentClient,
-  tableName: string,
-): UserRepository {
-  const model = createUserModel(client, tableName);
+function build(context: DynamoRepositoryContext): UserRepository {
+  const model = createUserModel(context.client, context.tableName);
   async function write(user: User, expectedVersion?: number): Promise<void> {
     const state = User.toPersistenceSnapshot(user);
     const item = {
@@ -74,3 +71,10 @@ export function createUserRepository(
     },
   });
 }
+
+// DB接続の詳細は生成時に閉じ込め、ユースケースへはRepository契約だけを渡す。
+export const DynamoUserRepository = Object.freeze({
+  create(context: DynamoRepositoryContext): UserRepository {
+    return build(context);
+  },
+});

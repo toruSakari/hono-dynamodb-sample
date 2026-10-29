@@ -11,7 +11,7 @@ import { QuantitySchema } from "../../../domain/value-objects/quantity.js";
 import { UnitPriceYenSchema } from "../../../domain/value-objects/unit-price-yen.js";
 import { ConflictError } from "../../../domain/errors/conflict-error.js";
 import { documentClient, rawClient, ordersTableName } from "../client.js";
-import { createOrderRepository } from "./order-repository.js";
+import { DynamoOrderRepository } from "./order-repository.js";
 
 void test(
   "実DB: 集約1アイテムの原子保存・競合時の明細保護・厳格復元",
@@ -19,7 +19,13 @@ void test(
     skip: process.env.RUN_DYNAMODB_TESTS !== "1",
   },
   async () => {
-    const repository = createOrderRepository(documentClient, ordersTableName);
+    const repository = DynamoOrderRepository.create({
+      client: documentClient,
+      tableName: ordersTableName,
+    });
+    assert(Object.isFrozen(DynamoOrderRepository));
+    assert(Object.isFrozen(repository));
+    assert.deepEqual(Object.keys(repository).sort(), ["findById", "insert", "update"]);
     const empty = Order.create(UserIdSchema.parse(randomUUID()));
     const id = empty.snapshot().id;
     try {

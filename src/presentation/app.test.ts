@@ -4,7 +4,7 @@ import type { PublicUser } from "../domain/entities/user.js";
 import { PublicUserSchema } from "./schemas/user-schemas.js";
 import { ErrorSchema } from "./schemas/common-schemas.js";
 import { readJson } from "./testing/http-test-helpers.js";
-import { createMemoryOrderRepository } from "../testing/repositories/memory-order-repository.js";
+import { MemoryOrderRepository } from "../testing/repositories/memory-order-repository.js";
 import type { UserRepository } from "../domain/repositories/user-repository.js";
 import { UserIdSchema, PasswordCandidateSchema } from "../domain/value-objects/index.js";
 import { UserService } from "../application/use-cases/user-service.js";
@@ -12,15 +12,15 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createApp } from "./app.js";
 import { passwordHasher } from "../infrastructure/security/argon2-password-hasher.js";
-import { createMemoryUserRepository } from "../testing/repositories/memory-user-repository.js";
+import { MemoryUserRepository } from "../testing/repositories/memory-user-repository.js";
 import { ConflictError } from "../domain/errors/conflict-error.js";
 
 function makeApp(
-  repository: UserRepository = createMemoryUserRepository(),
+  repository: UserRepository = MemoryUserRepository.create(),
 ): ReturnType<typeof createApp> {
   return createApp({
     userRepository: repository,
-    orderRepository: createMemoryOrderRepository(),
+    orderRepository: MemoryOrderRepository.create(),
     passwordHasher,
   });
 }
@@ -61,7 +61,7 @@ void test("不正入力・不正JSON・未存在・巨大入力を区別する",
   assert.equal((await app.request("/users", json({ name: "x".repeat(5000) }))).status, 413);
 });
 void test("内部エラーの詳細を漏らさず、競合は409を返す", async () => {
-  const repository = createMemoryUserRepository();
+  const repository = MemoryUserRepository.create();
   const app = makeApp({
     ...repository,
     async findById(): Promise<never> {
@@ -82,7 +82,7 @@ void test("内部エラーの詳細を漏らさず、競合は409を返す", asy
 });
 
 void test("メールとパスワードを変更でき、誤った現在パスワードや不正入力は保存しない", async () => {
-  const repository = createMemoryUserRepository();
+  const repository = MemoryUserRepository.create();
   const app = makeApp(repository);
   const response = await app.request(
     "/users",
@@ -136,7 +136,7 @@ void test("メールとパスワードを変更でき、誤った現在パスワ
 });
 
 void test("無効 User の HTTP 変更は409、管理者向け状態操作はHTTP非公開", async () => {
-  const repository = createMemoryUserRepository();
+  const repository = MemoryUserRepository.create();
   const app = makeApp(repository);
   const response = await app.request(
     "/users",
@@ -158,7 +158,7 @@ void test("無効 User の HTTP 変更は409、管理者向け状態操作はHTT
 });
 
 void test("不正なユースケースDTOの余分なpasswordHashを公開せず500へ変換する", async () => {
-  const users = createMemoryUserRepository();
+  const users = MemoryUserRepository.create();
   const customer = await UserService.register(
     users,
     passwordHasher,
@@ -172,7 +172,7 @@ void test("不正なユースケースDTOの余分なpasswordHashを公開せず
     },
   };
   const app = createApp(
-    { userRepository: users, orderRepository: createMemoryOrderRepository(), passwordHasher },
+    { userRepository: users, orderRepository: MemoryOrderRepository.create(), passwordHasher },
     { userService: maliciousService },
   );
   const response = await app.request("/users/" + customer.id);
