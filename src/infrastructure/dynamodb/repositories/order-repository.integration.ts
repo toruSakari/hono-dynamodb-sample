@@ -1,3 +1,4 @@
+import { createOrderModel } from "../models/order-model.js";
 import { z } from "zod";
 import { StoredOrderLineSchema } from "../../../domain/entities/order-line.js";
 import assert from "node:assert/strict";
@@ -19,10 +20,9 @@ void test(
     skip: process.env.RUN_DYNAMODB_TESTS !== "1",
   },
   async () => {
-    const repository = DynamoOrderRepository.create({
-      client: documentClient,
-      tableName: ordersTableName,
-    });
+    const repository = DynamoOrderRepository.create(
+      createOrderModel(documentClient, ordersTableName),
+    );
     assert(Object.isFrozen(DynamoOrderRepository));
     assert(Object.isFrozen(repository));
     assert.deepEqual(Object.keys(repository).sort(), ["findById", "insert", "update"]);

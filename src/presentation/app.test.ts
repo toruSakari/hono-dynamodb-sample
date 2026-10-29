@@ -10,15 +10,15 @@ import { UserIdSchema, PasswordCandidateSchema } from "../domain/value-objects/i
 import { UserService } from "../application/use-cases/user-service.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createApp } from "./app.js";
+import { createTestApp } from "./testing/create-test-app.js";
 import { passwordHasher } from "../infrastructure/security/argon2-password-hasher.js";
 import { MemoryUserRepository } from "../testing/repositories/memory-user-repository.js";
 import { ConflictError } from "../domain/errors/conflict-error.js";
 
 function makeApp(
   repository: UserRepository = MemoryUserRepository.create(),
-): ReturnType<typeof createApp> {
-  return createApp({
+): ReturnType<typeof createTestApp> {
+  return createTestApp({
     userRepository: repository,
     orderRepository: MemoryOrderRepository.create(),
     passwordHasher,
@@ -171,7 +171,7 @@ void test("不正なユースケースDTOの余分なpasswordHashを公開せず
       return { ...customer, passwordHash: "must-not-leak" };
     },
   };
-  const app = createApp(
+  const app = createTestApp(
     { userRepository: users, orderRepository: MemoryOrderRepository.create(), passwordHasher },
     { userService: maliciousService },
   );

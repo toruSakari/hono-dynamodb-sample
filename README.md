@@ -65,10 +65,12 @@ src/
       argon2-password-hasher.ts  Argon2idアダプター
   presentation/
     app.ts                       HTTPアプリの配線
+    database.ts                  Contextに保持するDBモデルの型
+    dependencies.ts              HTTP組立時の依存とテスト用差替え
     schemas/                     公開DTO・HTTP入力のZodスキーマ
     routes/                      OpenAPIルート定義・ハンドラー登録・横置きテスト
-    middleware/                  相関ID・時間・HTTPヘッダ・エラー変換
-    testing/                     HTTPテストのunknown境界ヘルパー
+    middleware/                  DB Context設定・相関ID・時間・HTTPヘッダ・エラー変換
+    testing/                     HTTPテストのunknown境界・DB不要のfactory差替え
   bootstrap/
     server.ts                    手動DIのComposition Rootとサーバー起動
   testing/repositories/          User / Orderのメモリ版テストアダプター
@@ -112,8 +114,8 @@ vite.config.ts                  Vite+のformat / 型付きlint設定
 User 集約が判定し、ユースケースが取得/保存を調整し、HTTP 層がステータスへ変換します。
 
 `src/bootstrap/server.ts` が **Composition Root** です。DI コンテナを使わず、
-DynamoDB clientからUser/OrderのRepositoryを生成し、Hasherとともに `createApp(dependencies)` へ渡します。
-HTTPハンドラーはその依存を `UserService` / `OrderService` の各メソッドへ渡します。テストでは `createApp` の第2引数でサービスや相関 ID 生成・時計を差し替えられます。
+DynamoDB clientからUser/OrderのElectroDBモデルを生成し、`db` とHasherを `createApp(dependencies)` へ渡します。
+ミドルウェアが `c.set("db", db)` でモデルを設定し、HTTPハンドラーが `c.get("db")` から必要なモデルだけを取り出してRepositoryを組み立てます。Serviceに渡すのはRepository契約だけです。テストでは第2引数のfactoryやサービス・時計を差し替えられます。
 domain / application は Hono の Context を参照しません。
 
 ## ElectroDB の役割
@@ -361,15 +363,19 @@ const user = await UserService.rename(userRepository, userId, validatedName);
 const order = await OrderService.confirm(orderRepository, orderId);
 ```
 
-手動DIの組立場所は `bootstrap/server.ts` です。HTTP層は渡された依存をServiceへ渡すだけで、DynamoDBやハッシュ実装を生成しません。
+手動DIの組立場所は `bootstrap/server.ts` です。HTTP層はContext内の設定済みDBモデルからRepositoryを組み立て、Repositoryと必要なHasherだけをServiceへ渡します。DynamoDB接続やハッシュ実装そのものはHTTPハンドラー内で生成しません。
 
 ### Repositoryはcreate → buildで組み立てる
 
 ```ts
-const repository = DynamoUserRepository.create({ client: documentClient, tableName });
+// コントローラー内。dbはミドルウェアが設定した型付きContext変数。
+const db = c.get("db");
+const repository = DynamoUserRepository.create(db.users);
 const user = await UserService.rename(repository, userId, validatedName);
 ```
 
-`DynamoUserRepository` / `DynamoOrderRepository` の凍結した操作オブジェクトから `create` を呼ぶと、非公開の `build` がメソッド付きの凍結Repositoryを返します。DB contextはインフラの生成境界だけで扱い、返す値には公開しません。Hono Contextもユースケースへ渡しません。
+`DynamoUserRepository` / `DynamoOrderRepository` の凍結した操作オブジェクトから `create` を呼ぶと、非公開の `build` がメソッド付きの凍結Repositoryを返します。Repositoryが受け取るのは接続先・テーブルを設定済みのElectroDBモデル（db）だけです。モデル組立はbootstrap側に置き、HTTPミドルウェア経由でContextに設定します。コントローラーはContext全体ではなく `db.users` / `db.orders` だけをRepositoryに渡します。Hono ContextもDBモデルもユースケースへ渡しません。
 
 `MemoryUserRepository.create()` / `MemoryOrderRepository.create()` も同じ構造ですが、呼び出すたびに独立したMapを生成します。サービスは直接オブジェクト方式のままで、生成済みRepositoryを引数で受け取ります。
+
+DBモデルは起動時に生成して共有し、リクエストごとにDB接続を作り直しません。Repositoryは各コントローラーで軽量な操作オブジェクトとして組み立てます。Contextへの設定は認証やテナント分離ではありません。

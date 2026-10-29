@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { bodyLimit } from "hono/body-limit";
+import { dbContext } from "./middleware/db-context.js";
 import { requestContext } from "./middleware/request-context.js";
 import type { HttpEnvironment } from "./middleware/request-context.js";
 import { errorHandler } from "./middleware/error-handler.js";
@@ -40,9 +41,10 @@ export function createApp(
       onError: (c) => c.json({ error: "リクエスト本文が大きすぎます" }, 413),
     }),
   );
+  app.use("*", dbContext(dependencies.db));
   app.openapi(healthRoute, (c) => c.json({ status: "ok" as const }, 200));
-  registerUserRoutes(app, dependencies, options.userService);
-  registerOrderRoutes(app, dependencies, options.orderService);
+  registerUserRoutes(app, dependencies, options);
+  registerOrderRoutes(app, options);
   registerDocumentationRoutes(app);
   app.notFound((c) => c.json({ error: "見つかりません" }, 404));
   app.onError(errorHandler);

@@ -1,11 +1,10 @@
 import { ConditionalWrite, RawGetResultSchema } from "./repository-support.js";
 import type { OrderId } from "../../../domain/value-objects/order-id.js";
-import type { DynamoRepositoryContext } from "./repository-support.js";
 import { z } from "zod";
 import { Order } from "../../../domain/entities/order.js";
 import type { OrderRepository } from "../../../domain/repositories/order-repository.js";
 import { DomainRuleError } from "../../../domain/errors/domain-rule-error.js";
-import { createOrderModel } from "../models/order-model.js";
+import type { OrderModel } from "../models/order-model.js";
 
 const MetadataSchema = z
   .object({
@@ -14,8 +13,7 @@ const MetadataSchema = z
   })
   .passthrough();
 
-function build(context: DynamoRepositoryContext): OrderRepository {
-  const model = createOrderModel(context.client, context.tableName);
+function build(db: OrderModel): OrderRepository {
   async function write(order: Order, expectedVersion?: number): Promise<void> {
     const snapshot = Order.toPersistenceSnapshot(order);
     const item = {
@@ -38,9 +36,9 @@ function build(context: DynamoRepositoryContext): OrderRepository {
     }
     try {
       if (expectedVersion === undefined) {
-        await model.create(item).go({ originalErr: true });
+        await db.create(item).go({ originalErr: true });
       } else {
-        await model
+        await db
           .put(item)
           .where((attributes, operations) => operations.eq(attributes.version, expectedVersion))
           .go({ originalErr: true });
@@ -51,7 +49,7 @@ function build(context: DynamoRepositoryContext): OrderRepository {
   }
   return Object.freeze<OrderRepository>({
     async findById(id: OrderId): Promise<Order | null> {
-      const raw: unknown = await model
+      const raw: unknown = await db
         .get({ id })
         .go({ data: "raw", consistent: true, originalErr: true });
       const result = RawGetResultSchema.parse(raw).data;
@@ -76,9 +74,9 @@ function build(context: DynamoRepositoryContext): OrderRepository {
   });
 }
 
-// DB接続の詳細は生成時に閉じ込め、ユースケースへはRepository契約だけを渡す。
+// 設定済みのDBモデルだけを受け取る。Contextや接続設定は受け取らない。
 export const DynamoOrderRepository = Object.freeze({
-  create(context: DynamoRepositoryContext): OrderRepository {
-    return build(context);
+  create(db: OrderModel): OrderRepository {
+    return build(db);
   },
 });

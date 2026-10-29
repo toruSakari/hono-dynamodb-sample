@@ -1,4 +1,6 @@
-import type { AppDependencies } from "../dependencies.js";
+import { DynamoUserRepository } from "../../infrastructure/dynamodb/repositories/user-repository.js";
+import { DynamoOrderRepository } from "../../infrastructure/dynamodb/repositories/order-repository.js";
+import type { AppOptions } from "../dependencies.js";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { HttpEnvironment } from "../middleware/request-context.js";
 import { OrderService } from "../../application/use-cases/order-service.js";
@@ -14,13 +16,15 @@ import {
 
 function registerOrderLifecycleRoutes(
   app: OpenAPIHono<HttpEnvironment>,
-  dependencies: AppDependencies,
-  orderService: OrderService,
+  options: AppOptions,
 ): void {
   app.openapi(createOrderRoute, async (c) => {
-    const order = await orderService.create(
-      dependencies.orderRepository,
-      dependencies.userRepository,
+    const db = c.get("db");
+    const userRepository = (options.userRepositoryFactory ?? DynamoUserRepository).create(db.users);
+    const repository = (options.orderRepositoryFactory ?? DynamoOrderRepository).create(db.orders);
+    const order = await (options.orderService ?? OrderService).create(
+      repository,
+      userRepository,
       c.req.valid("json").customerId,
     );
     return order
@@ -28,28 +32,36 @@ function registerOrderLifecycleRoutes(
       : c.json({ error: "顧客が見つかりません" }, 404);
   });
   app.openapi(getOrderRoute, async (c) => {
-    const order = await orderService.find(dependencies.orderRepository, c.req.valid("param").id);
+    const db = c.get("db");
+    const repository = (options.orderRepositoryFactory ?? DynamoOrderRepository).create(db.orders);
+    const order = await (options.orderService ?? OrderService).find(
+      repository,
+      c.req.valid("param").id,
+    );
     return order
       ? c.json(PublicOrderSchema.parse(order), 200)
       : c.json({ error: "注文が見つかりません" }, 404);
   });
   app.openapi(confirmOrderRoute, async (c) => {
-    const order = await orderService.confirm(dependencies.orderRepository, c.req.valid("param").id);
+    const db = c.get("db");
+    const repository = (options.orderRepositoryFactory ?? DynamoOrderRepository).create(db.orders);
+    const order = await (options.orderService ?? OrderService).confirm(
+      repository,
+      c.req.valid("param").id,
+    );
     return order
       ? c.json(PublicOrderSchema.parse(order), 200)
       : c.json({ error: "注文が見つかりません" }, 404);
   });
 }
 
-function registerOrderLineRoutes(
-  app: OpenAPIHono<HttpEnvironment>,
-  dependencies: AppDependencies,
-  orderService: OrderService,
-): void {
+function registerOrderLineRoutes(app: OpenAPIHono<HttpEnvironment>, options: AppOptions): void {
   app.openapi(addOrderLineRoute, async (c) => {
+    const db = c.get("db");
+    const repository = (options.orderRepositoryFactory ?? DynamoOrderRepository).create(db.orders);
     const input = c.req.valid("json");
-    const order = await orderService.addLine(
-      dependencies.orderRepository,
+    const order = await (options.orderService ?? OrderService).addLine(
+      repository,
       c.req.valid("param").id,
       input.productCode,
       input.unitPriceYen,
@@ -60,9 +72,11 @@ function registerOrderLineRoutes(
       : c.json({ error: "注文が見つかりません" }, 404);
   });
   app.openapi(changeOrderQuantityRoute, async (c) => {
+    const db = c.get("db");
+    const repository = (options.orderRepositoryFactory ?? DynamoOrderRepository).create(db.orders);
     const input = c.req.valid("param");
-    const order = await orderService.changeQuantity(
-      dependencies.orderRepository,
+    const order = await (options.orderService ?? OrderService).changeQuantity(
+      repository,
       input.id,
       input.lineId,
       c.req.valid("json").quantity,
@@ -72,9 +86,11 @@ function registerOrderLineRoutes(
       : c.json({ error: "注文が見つかりません" }, 404);
   });
   app.openapi(removeOrderLineRoute, async (c) => {
+    const db = c.get("db");
+    const repository = (options.orderRepositoryFactory ?? DynamoOrderRepository).create(db.orders);
     const input = c.req.valid("param");
-    const order = await orderService.removeLine(
-      dependencies.orderRepository,
+    const order = await (options.orderService ?? OrderService).removeLine(
+      repository,
       input.id,
       input.lineId,
     );
@@ -87,9 +103,8 @@ function registerOrderLineRoutes(
 // 全ての明細操作をOrderユースケースへ渡し、子エンティティをHTTPから直接操作しない。
 export function registerOrderRoutes(
   app: OpenAPIHono<HttpEnvironment>,
-  dependencies: AppDependencies,
-  service: OrderService = OrderService,
+  options: AppOptions = {},
 ): void {
-  registerOrderLifecycleRoutes(app, dependencies, service);
-  registerOrderLineRoutes(app, dependencies, service);
+  registerOrderLifecycleRoutes(app, options);
+  registerOrderLineRoutes(app, options);
 }

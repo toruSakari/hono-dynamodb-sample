@@ -1,16 +1,16 @@
 import { MemoryOrderRepository } from "../../testing/repositories/memory-order-repository.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createApp } from "../app.js";
+import { createTestApp } from "../testing/create-test-app.js";
 import { passwordHasher } from "../../infrastructure/security/argon2-password-hasher.js";
 import { MemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
 import { ErrorSchema } from "../schemas/common-schemas.js";
 import { PublicUserSchema } from "../schemas/user-schemas.js";
 import { readJson, readPath, readObject } from "../testing/http-test-helpers.js";
 
-const makeApp = (): ReturnType<typeof createApp> => {
+const makeApp = (): ReturnType<typeof createTestApp> => {
   const users = MemoryUserRepository.create();
-  return createApp({
+  return createTestApp({
     userRepository: users,
     orderRepository: MemoryOrderRepository.create(),
     passwordHasher,

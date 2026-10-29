@@ -1,3 +1,4 @@
+import { createUserModel } from "../models/user-model.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DeleteCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
@@ -19,10 +20,7 @@ void test(
     skip: process.env.RUN_DYNAMODB_TESTS !== "1",
   },
   async () => {
-    const repository = DynamoUserRepository.create({
-      client: documentClient,
-      tableName: tableName,
-    });
+    const repository = DynamoUserRepository.create(createUserModel(documentClient, tableName));
     assert(Object.isFrozen(DynamoUserRepository));
     assert(Object.isFrozen(repository));
     assert.deepEqual(Object.keys(repository).sort(), ["findById", "insert", "update"]);

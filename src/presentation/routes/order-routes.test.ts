@@ -4,7 +4,7 @@ import { PublicUserSchema } from "../schemas/user-schemas.js";
 import { readJson, readPath } from "../testing/http-test-helpers.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createApp } from "../app.js";
+import { createTestApp } from "../testing/create-test-app.js";
 import { MemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
 import { MemoryOrderRepository } from "../../testing/repositories/memory-order-repository.js";
 import { passwordHasher } from "../../infrastructure/security/argon2-password-hasher.js";
@@ -21,14 +21,14 @@ const request = (body: unknown, method = "POST"): RequestInit => ({
 function setup(): {
   users: UserRepository;
   orders: OrderRepository;
-  app: ReturnType<typeof createApp>;
+  app: ReturnType<typeof createTestApp>;
 } {
   const users = MemoryUserRepository.create();
   const orders = MemoryOrderRepository.create();
   return {
     users,
     orders,
-    app: createApp({ userRepository: users, orderRepository: orders, passwordHasher }),
+    app: createTestApp({ userRepository: users, orderRepository: orders, passwordHasher }),
   };
 }
 
@@ -150,7 +150,7 @@ void test("注文Repositoryの競合は409として返し、自動リトライ�
   const users = MemoryUserRepository.create();
   const orders = MemoryOrderRepository.create();
   let writes = 0;
-  const app = createApp({
+  const app = createTestApp({
     userRepository: users,
     passwordHasher,
     orderRepository: {

@@ -1,10 +1,9 @@
 import { ConditionalWrite, RawGetResultSchema } from "./repository-support.js";
 import type { UserId } from "../../../domain/value-objects/user-id.js";
-import type { DynamoRepositoryContext } from "./repository-support.js";
 import { z } from "zod";
 import type { UserRepository } from "../../../domain/repositories/user-repository.js";
 import { User } from "../../../domain/entities/user.js";
-import { createUserModel } from "../models/user-model.js";
+import type { UserModel } from "../models/user-model.js";
 
 // 生データから除去してよいのは既知の ElectroDB メタデータだけ。
 // 別エンティティ/別モデル版は拒否。初版（両方なし）は互換性のため許可する。
@@ -16,8 +15,7 @@ const MetadataSchema = z
   .passthrough()
   .refine((row) => (row.__edb_e__ === undefined) === (row.__edb_v__ === undefined));
 
-function build(context: DynamoRepositoryContext): UserRepository {
-  const model = createUserModel(context.client, context.tableName);
+function build(db: UserModel): UserRepository {
   async function write(user: User, expectedVersion?: number): Promise<void> {
     const state = User.toPersistenceSnapshot(user);
     const item = {
@@ -32,10 +30,10 @@ function build(context: DynamoRepositoryContext): UserRepository {
     try {
       if (expectedVersion === undefined) {
         // create は attribute_not_exists を付加し、既存レコードを上書きしない。
-        await model.create(item).go({ originalErr: true });
+        await db.create(item).go({ originalErr: true });
       } else {
         // put に version 条件を付ける。条件なしの上書き・upsert にしない。
-        await model
+        await db
           .put(item)
           .where((attributes, operations) => operations.eq(attributes.version, expectedVersion))
           .go({ originalErr: true });
@@ -47,7 +45,7 @@ function build(context: DynamoRepositoryContext): UserRepository {
   return Object.freeze<UserRepository>({
     async findById(id: UserId): Promise<User | null> {
       // 整形済み結果では未知フィールド等が落ちるため raw で読み、ドメインで再検証する。
-      const raw: unknown = await model
+      const raw: unknown = await db
         .get({ id })
         .go({ data: "raw", consistent: true, originalErr: true });
       const result = RawGetResultSchema.parse(raw).data;
@@ -72,9 +70,9 @@ function build(context: DynamoRepositoryContext): UserRepository {
   });
 }
 
-// DB接続の詳細は生成時に閉じ込め、ユースケースへはRepository契約だけを渡す。
+// 設定済みのDBモデルだけを受け取る。Contextや接続設定は受け取らない。
 export const DynamoUserRepository = Object.freeze({
-  create(context: DynamoRepositoryContext): UserRepository {
-    return build(context);
+  create(db: UserModel): UserRepository {
+    return build(db);
   },
 });

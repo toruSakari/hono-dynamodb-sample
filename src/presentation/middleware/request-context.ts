@@ -1,7 +1,9 @@
 import type { MiddlewareHandler } from "hono";
 import { createMiddleware } from "hono/factory";
 
-export type HttpEnvironment = { Variables: { requestId: string } };
+import type { DatabaseModels } from "../database.js";
+
+export type HttpEnvironment = { Variables: { requestId: string; db: DatabaseModels } };
 export type RequestContextDependencies = Readonly<{
   newRequestId(): string;
   now(): number;

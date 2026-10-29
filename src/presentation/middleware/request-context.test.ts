@@ -3,7 +3,7 @@ import { readJson } from "../testing/http-test-helpers.js";
 import { MemoryOrderRepository } from "../../testing/repositories/memory-order-repository.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createApp } from "../app.js";
+import { createTestApp } from "../testing/create-test-app.js";
 import { passwordHasher } from "../../infrastructure/security/argon2-password-hasher.js";
 import { MemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
 
@@ -11,7 +11,7 @@ void test("手動DIした相関IDと時計を使い、成功・エラーにも�
   const users = MemoryUserRepository.create();
   let clock = 0;
   let id = 0;
-  const app = createApp(
+  const app = createTestApp(
     { userRepository: users, orderRepository: MemoryOrderRepository.create(), passwordHasher },
     {
       contextDependencies: {
@@ -56,7 +56,7 @@ void test("手動DIした相関IDと時計を使い、成功・エラーにも�
 
 void test("下位層の例外も機密を漏らさず500と共通ヘッダに変換する", async () => {
   const repository = MemoryUserRepository.create();
-  const app = createApp({
+  const app = createTestApp({
     userRepository: {
       ...repository,
       async findById(): Promise<never> {

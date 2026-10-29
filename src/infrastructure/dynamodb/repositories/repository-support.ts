@@ -1,4 +1,3 @@
-import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { z } from "zod";
 import { ConditionalCheckFailedException } from "@aws-sdk/client-dynamodb";
 import { ConflictError } from "../../../domain/errors/conflict-error.js";
@@ -24,9 +23,3 @@ export const ConditionalWrite = Object.freeze({
 export const RawGetResultSchema = z.object({
   data: z.object({ Item: z.unknown().optional() }),
 });
-
-// インフラ生成境界専用。Hono Contextでもユースケースの引数でもない。
-export type DynamoRepositoryContext = Readonly<{
-  client: DynamoDBDocumentClient;
-  tableName: string;
-}>;

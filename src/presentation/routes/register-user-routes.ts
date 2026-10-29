@@ -1,4 +1,5 @@
-import type { AppDependencies } from "../dependencies.js";
+import { DynamoUserRepository } from "../../infrastructure/dynamodb/repositories/user-repository.js";
+import type { AppDependencies, AppOptions } from "../dependencies.js";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { HttpEnvironment } from "../middleware/request-context.js";
 import { UserService } from "../../application/use-cases/user-service.js";
@@ -14,14 +15,16 @@ import {
 function registerUserReadRoutes(
   app: OpenAPIHono<HttpEnvironment>,
   dependencies: AppDependencies,
-  service: UserService,
+  options: AppOptions,
 ): void {
   app.openapi(createUserRoute, async (c) => {
+    const db = c.get("db");
+    const repository = (options.userRepositoryFactory ?? DynamoUserRepository).create(db.users);
     const input = c.req.valid("json");
     return c.json(
       PublicUserSchema.parse(
-        await service.register(
-          dependencies.userRepository,
+        await (options.userService ?? UserService).register(
+          repository,
           dependencies.passwordHasher,
           input.name,
           input.password,
@@ -32,7 +35,12 @@ function registerUserReadRoutes(
     );
   });
   app.openapi(getUserRoute, async (c) => {
-    const user = await service.find(dependencies.userRepository, c.req.valid("param").id);
+    const db = c.get("db");
+    const repository = (options.userRepositoryFactory ?? DynamoUserRepository).create(db.users);
+    const user = await (options.userService ?? UserService).find(
+      repository,
+      c.req.valid("param").id,
+    );
     return user
       ? c.json(PublicUserSchema.parse(user), 200)
       : c.json({ error: "見つかりません" }, 404);
@@ -42,11 +50,13 @@ function registerUserReadRoutes(
 function registerUserMutationRoutes(
   app: OpenAPIHono<HttpEnvironment>,
   dependencies: AppDependencies,
-  service: UserService,
+  options: AppOptions,
 ): void {
   app.openapi(renameRoute, async (c) => {
-    const user = await service.rename(
-      dependencies.userRepository,
+    const db = c.get("db");
+    const repository = (options.userRepositoryFactory ?? DynamoUserRepository).create(db.users);
+    const user = await (options.userService ?? UserService).rename(
+      repository,
       c.req.valid("param").id,
       c.req.valid("json").name,
     );
@@ -55,8 +65,10 @@ function registerUserMutationRoutes(
       : c.json({ error: "見つかりません" }, 404);
   });
   app.openapi(changeEmailRoute, async (c) => {
-    const user = await service.changeEmail(
-      dependencies.userRepository,
+    const db = c.get("db");
+    const repository = (options.userRepositoryFactory ?? DynamoUserRepository).create(db.users);
+    const user = await (options.userService ?? UserService).changeEmail(
+      repository,
       c.req.valid("param").id,
       c.req.valid("json").email,
     );
@@ -65,9 +77,11 @@ function registerUserMutationRoutes(
       : c.json({ error: "見つかりません" }, 404);
   });
   app.openapi(changePasswordRoute, async (c) => {
+    const db = c.get("db");
+    const repository = (options.userRepositoryFactory ?? DynamoUserRepository).create(db.users);
     const input = c.req.valid("json");
-    const user = await service.changePassword(
-      dependencies.userRepository,
+    const user = await (options.userService ?? UserService).changePassword(
+      repository,
       dependencies.passwordHasher,
       c.req.valid("param").id,
       input.currentPassword,
@@ -83,8 +97,8 @@ function registerUserMutationRoutes(
 export function registerUserRoutes(
   app: OpenAPIHono<HttpEnvironment>,
   dependencies: AppDependencies,
-  service: UserService = UserService,
+  options: AppOptions = {},
 ): void {
-  registerUserReadRoutes(app, dependencies, service);
-  registerUserMutationRoutes(app, dependencies, service);
+  registerUserReadRoutes(app, dependencies, options);
+  registerUserMutationRoutes(app, dependencies, options);
 }
