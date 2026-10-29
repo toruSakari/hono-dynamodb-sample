@@ -50,11 +50,11 @@ void test("ZodからOpenAPI 3.1を生成し、全API・公開DTO・入力専用�
     "version",
   ]);
   assert.equal(readPath(schemas, "PublicUser", "additionalProperties"), false);
-  assert(
-    JSON.stringify(readPath(schemas, "PublicUser", "properties", "email")).includes(
-      '"type":"null"',
-    ),
-  );
+  assert.deepEqual(readPath(schemas, "PublicUser", "properties", "email", "type"), [
+    "string",
+    "null",
+  ]);
+
   assert.equal(readPath(schemas, "CreateUser", "properties", "password", "writeOnly"), true);
   assert.equal(
     readPath(schemas, "ChangePassword", "properties", "currentPassword", "writeOnly"),

@@ -1,10 +1,9 @@
-import { AggregateVersionSchema } from "../../domain/value-objects/aggregate-version.js";
+import { PublicUserSchema as DomainPublicUserSchema } from "../../domain/entities/user.js";
 import { z } from "@hono/zod-openapi";
 import {
   UserIdSchema,
   UserNameSchema,
   EmailAddressSchema,
-  UserStatusSchema,
   NewPasswordSchema,
   PasswordCandidateSchema,
 } from "../../domain/value-objects/index.js";
@@ -20,15 +19,9 @@ const email = EmailAddressSchema.clone().openapi({
   maxLength: 254,
   description: "構文検証のみ。所有権確認済みではありません。",
 });
-export const PublicUserSchema = z
-  .strictObject({
-    id: UserIdSchema,
-    name,
-    email: z.union([email, z.null()]),
-    status: UserStatusSchema,
-    version: AggregateVersionSchema,
-  })
-  .openapi("PublicUser");
+export const PublicUserSchema = DomainPublicUserSchema.clone().openapi("PublicUser", {
+  additionalProperties: false,
+});
 export const UserParamsSchema = z.object({
   id: UserIdSchema.clone().openapi({
     param: { name: "id", in: "path" },

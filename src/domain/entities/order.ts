@@ -17,8 +17,8 @@ import {
   DraftOrderStatus,
   ConfirmedOrderStatus,
 } from "../value-objects/order-status.js";
-import { OrderLine, StoredOrderLineSchema } from "./order-line.js";
-import type { StoredOrderLine, PublicOrderLine } from "./order-line.js";
+import { OrderLine, StoredOrderLineSchema, PublicOrderLineSchema } from "./order-line.js";
+import type { StoredOrderLine } from "./order-line.js";
 
 const StoredOrderSchema = z
   .strictObject({
@@ -45,12 +45,18 @@ export type StoredOrder = Readonly<
     lines: readonly StoredOrderLine[];
   }
 >;
-export type PublicOrder = Readonly<
-  Pick<StoredOrder, "id" | "customerId" | "status" | "version"> & {
-    lines: readonly PublicOrderLine[];
-    totalYen: number;
-  }
->;
+// ルート・明細・配列それぞれを公開スキーマで射影し、未知項目の除去と凍結を行う。
+export const PublicOrderSchema = z
+  .object({
+    id: OrderIdSchema,
+    customerId: UserIdSchema,
+    status: OrderStatusSchema,
+    version: AggregateVersionSchema,
+    lines: z.array(PublicOrderLineSchema).max(20).readonly(),
+    totalYen: z.number().int().nonnegative().max(1_980_000_000),
+  })
+  .readonly();
+export type PublicOrder = z.infer<typeof PublicOrderSchema>;
 export type Order = Readonly<{
   snapshot(): PublicOrder;
   addLine(productCode: ProductCode, unitPriceYen: UnitPriceYen, quantity: Quantity): Order;
@@ -87,12 +93,9 @@ function build(input: unknown): Order {
   const order = Object.freeze<Order>({
     // 子の操作オブジェクトは渡さず、深く凍結した公開スナップショットだけを返す。
     snapshot(): PublicOrder {
-      const snapshots = Object.freeze(lines.map((line) => line.snapshot()));
-      return Object.freeze({
-        id: state.id,
-        customerId: state.customerId,
-        status: state.status,
-        version: state.version,
+      const snapshots = lines.map((line) => line.snapshot());
+      return PublicOrderSchema.parse({
+        ...state,
         lines: snapshots,
         totalYen: snapshots.reduce((sum, line) => sum + line.lineTotalYen, 0),
       });

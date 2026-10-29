@@ -1,7 +1,6 @@
 import type { UserRouteDependencies } from "../dependencies.js";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { HttpEnvironment } from "../middleware/request-context.js";
-import { PublicUserSchema } from "../schemas/user-schemas.js";
 import {
   createUserRoute,
   getUserRoute,
@@ -19,14 +18,12 @@ function registerUserReadRoutes(
     const repository = dependencies.userRepositoryFactory.create(db.users);
     const input = c.req.valid("json");
     return c.json(
-      PublicUserSchema.parse(
-        await dependencies.userService.register(
-          repository,
-          dependencies.passwordHasher,
-          input.name,
-          input.password,
-          input.email,
-        ),
+      await dependencies.userService.register(
+        repository,
+        dependencies.passwordHasher,
+        input.name,
+        input.password,
+        input.email,
       ),
       201,
     );
@@ -35,9 +32,7 @@ function registerUserReadRoutes(
     const db = c.get("db");
     const repository = dependencies.userRepositoryFactory.create(db.users);
     const user = await dependencies.userService.find(repository, c.req.valid("param").id);
-    return user
-      ? c.json(PublicUserSchema.parse(user), 200)
-      : c.json({ error: "見つかりません" }, 404);
+    return user ? c.json(user, 200) : c.json({ error: "見つかりません" }, 404);
   });
 }
 
@@ -53,9 +48,7 @@ function registerUserMutationRoutes(
       c.req.valid("param").id,
       c.req.valid("json").name,
     );
-    return user
-      ? c.json(PublicUserSchema.parse(user), 200)
-      : c.json({ error: "見つかりません" }, 404);
+    return user ? c.json(user, 200) : c.json({ error: "見つかりません" }, 404);
   });
   app.openapi(changeEmailRoute, async (c) => {
     const db = c.get("db");
@@ -65,9 +58,7 @@ function registerUserMutationRoutes(
       c.req.valid("param").id,
       c.req.valid("json").email,
     );
-    return user
-      ? c.json(PublicUserSchema.parse(user), 200)
-      : c.json({ error: "見つかりません" }, 404);
+    return user ? c.json(user, 200) : c.json({ error: "見つかりません" }, 404);
   });
   app.openapi(changePasswordRoute, async (c) => {
     const db = c.get("db");
@@ -80,9 +71,7 @@ function registerUserMutationRoutes(
       input.currentPassword,
       input.newPassword,
     );
-    return user
-      ? c.json(PublicUserSchema.parse(user), 200)
-      : c.json({ error: "見つかりません" }, 404);
+    return user ? c.json(user, 200) : c.json({ error: "見つかりません" }, 404);
   });
 }
 

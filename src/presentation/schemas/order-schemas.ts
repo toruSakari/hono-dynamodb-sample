@@ -1,4 +1,4 @@
-import { AggregateVersionSchema } from "../../domain/value-objects/aggregate-version.js";
+import { PublicOrderSchema as DomainPublicOrderSchema } from "../../domain/entities/order.js";
 import { z } from "@hono/zod-openapi";
 import { UserIdSchema } from "../../domain/value-objects/user-id.js";
 import { OrderIdSchema } from "../../domain/value-objects/order-id.js";
@@ -6,28 +6,11 @@ import { OrderLineIdSchema } from "../../domain/value-objects/order-line-id.js";
 import { ProductCodeSchema } from "../../domain/value-objects/product-code.js";
 import { QuantitySchema } from "../../domain/value-objects/quantity.js";
 import { UnitPriceYenSchema } from "../../domain/value-objects/unit-price-yen.js";
-import { OrderStatusSchema } from "../../domain/value-objects/order-status.js";
 
-// 合計はクライアント入力でなく集約の計算結果。JPY整数だけを扱う。
-export const PublicOrderLineSchema = z
-  .strictObject({
-    id: OrderLineIdSchema,
-    productCode: ProductCodeSchema,
-    unitPriceYen: UnitPriceYenSchema,
-    quantity: QuantitySchema,
-    lineTotalYen: z.number().int().min(0).max(99_000_000),
-  })
-  .openapi("PublicOrderLine");
-export const PublicOrderSchema = z
-  .strictObject({
-    id: OrderIdSchema,
-    customerId: UserIdSchema,
-    status: OrderStatusSchema,
-    version: AggregateVersionSchema,
-    lines: z.array(PublicOrderLineSchema).max(20),
-    totalYen: z.number().int().min(0).max(1_980_000_000),
-  })
-  .openapi("PublicOrder");
+// 公開形状はドメインの許可リストを再利用する。HTTPで再parseしない。
+export const PublicOrderSchema = DomainPublicOrderSchema.clone().openapi("PublicOrder", {
+  additionalProperties: false,
+});
 export const CreateOrderSchema = z
   .strictObject({ customerId: UserIdSchema })
   .openapi("CreateOrder");

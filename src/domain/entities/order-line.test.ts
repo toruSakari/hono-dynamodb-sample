@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { OrderLine } from "./order-line.js";
+import { OrderLine, PublicOrderLineSchema } from "./order-line.js";
 import { ProductCodeSchema } from "../value-objects/product-code.js";
 import { QuantitySchema } from "../value-objects/quantity.js";
 import type { Quantity } from "../value-objects/quantity.js";
@@ -50,4 +50,20 @@ void test("OrderLine の復元は子の全項目を検証し、派生金額や�
     assert.throws(() => OrderLine.restore(invalid));
   }
   assert.throws(() => OrderLine.toPersistenceSnapshot({} as OrderLine));
+});
+
+void test("公開明細スキーマは許可項目だけを残し、入力を変えず凍結したコピーを返す", () => {
+  const line = OrderLine.create(
+    ProductCodeSchema.parse("BOOK_01"),
+    UnitPriceYenSchema.parse(1200),
+    QuantitySchema.parse(2),
+  );
+  const input = { ...line.snapshot(), internalNote: "公開しない内部メモ" };
+  const projected = PublicOrderLineSchema.parse(input);
+  assert.deepEqual(projected, line.snapshot());
+  assert.equal("internalNote" in projected, false);
+  assert.equal("internalNote" in input, true);
+  assert(Object.isFrozen(projected));
+  assert.throws(() => Object.assign(projected, { quantity: 99 }));
+  assert.throws(() => PublicOrderLineSchema.parse({ ...input, quantity: 0 }));
 });

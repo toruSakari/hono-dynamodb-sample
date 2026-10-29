@@ -67,7 +67,7 @@ src/
     app.ts                       HTTPアプリの配線
     database.ts                  Contextに保持するDBモデルの型
     dependencies.ts              HTTP組立時の依存とテスト用差替え
-    schemas/                     公開DTO・HTTP入力のZodスキーマ
+    schemas/                     ドメイン公開スキーマのOpenAPI拡張・HTTP入力
     routes/                      OpenAPIルート定義・ハンドラー登録・横置きテスト
     middleware/                  DB Context設定・相関ID・時間・HTTPヘッダ・エラー変換
     testing/                     HTTPテストのunknown境界・DB不要のfactory差替え
@@ -269,10 +269,11 @@ curl -sS -X POST http://127.0.0.1:3000/orders/$ORDER_ID/confirm
 
 ### 公開型の重複を減らす
 
-`PublicUser` / `PublicOrder` は保存型から **Pickによる許可リスト**で公開フィールドを選びます。
+`PublicUserSchema` / `PublicOrderSchema` / `PublicOrderLineSchema` をドメイン側の **z.objectによる許可リスト**として定義し、公開型はそのスキーマから推論します。
 秘密フィールドが将来追加された際に自動公開されないよう、単に「ハッシュ以外を全部」というOmitにはしません。
-型のPick/Omitは実行時に値を削除しないため、`snapshot()` でも公開項目を明示的に取り出します。
-HTTP側でも公開Zodスキーマを用い、ハッシュが応答に現れないことをテストしています。
+`snapshot()` は公開スキーマにstate（必要なら計算済み金額）をparseします。未知の項目は除去され、`passwordHash` は公開されません。`.readonly()` で型と実行時の不変性を揃え、Orderは明細と配列も凍結します。
+HTTPは検証済みsnapshotをそのまま返し、再parseしません。OpenAPIは同じドメインスキーマをcloneして説明を追加します。Service実装は信頼境界内です。任意の差替えServiceが契約に反して秘密を返すケースをHTTPで再検証する設計ではありません。
+HTTPテストはparseで項目を削除する前の生JSON応答を検査し、ハッシュが応答に現れないことを確認しています。
 
 ## Vite+ と明示型
 

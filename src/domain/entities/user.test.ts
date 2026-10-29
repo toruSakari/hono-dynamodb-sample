@@ -2,7 +2,7 @@ import { EmailAddressSchema } from "../value-objects/email-address.js";
 import { DomainRuleError, InvalidCurrentPasswordError } from "../errors/domain-rule-error.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { User } from "./user.js";
+import { User, PublicUserSchema } from "./user.js";
 import {
   NewPasswordSchema,
   UserNameSchema,
@@ -141,4 +141,20 @@ void test("初版レコードを復元でき、新しい状態の不正値は拒
   assert.equal(restored.snapshot().status, "active");
   assert.throws(() => User.restore({ ...current, email: "invalid" }));
   assert.throws(() => User.restore({ ...current, status: "deleted" }));
+});
+
+void test("公開スキーマはstateの秘密・未知項目を除去し、snapshotをreadonlyに保つ", async () => {
+  const user = await User.create(
+    UserNameSchema.parse("公開サンプル"),
+    NewPasswordSchema.parse("demo-only-long-password"),
+    passwordHasher,
+  );
+  const stored = User.toPersistenceSnapshot(user);
+  const publicValue = PublicUserSchema.parse({ ...stored, futureSecret: "must-not-leak" });
+  assert.deepEqual(Object.keys(publicValue).sort(), ["email", "id", "name", "status", "version"]);
+  assert(Object.isFrozen(publicValue));
+  assert.deepEqual(user.snapshot(), publicValue);
+  assert(Object.isFrozen(user.snapshot()));
+  assert(!JSON.stringify(user.snapshot()).includes(stored.passwordHash));
+  assert.throws(() => PublicUserSchema.parse({ ...stored, name: "" }));
 });

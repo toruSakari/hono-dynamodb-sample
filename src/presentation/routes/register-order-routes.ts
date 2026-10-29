@@ -1,7 +1,6 @@
 import type { OrderRouteDependencies } from "../dependencies.js";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { HttpEnvironment } from "../middleware/request-context.js";
-import { PublicOrderSchema } from "../schemas/order-schemas.js";
 import {
   createOrderRoute,
   getOrderRoute,
@@ -24,25 +23,19 @@ function registerOrderLifecycleRoutes(
       userRepository,
       c.req.valid("json").customerId,
     );
-    return order
-      ? c.json(PublicOrderSchema.parse(order), 201)
-      : c.json({ error: "顧客が見つかりません" }, 404);
+    return order ? c.json(order, 201) : c.json({ error: "顧客が見つかりません" }, 404);
   });
   app.openapi(getOrderRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.orderRepositoryFactory.create(db.orders);
     const order = await dependencies.orderService.find(repository, c.req.valid("param").id);
-    return order
-      ? c.json(PublicOrderSchema.parse(order), 200)
-      : c.json({ error: "注文が見つかりません" }, 404);
+    return order ? c.json(order, 200) : c.json({ error: "注文が見つかりません" }, 404);
   });
   app.openapi(confirmOrderRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.orderRepositoryFactory.create(db.orders);
     const order = await dependencies.orderService.confirm(repository, c.req.valid("param").id);
-    return order
-      ? c.json(PublicOrderSchema.parse(order), 200)
-      : c.json({ error: "注文が見つかりません" }, 404);
+    return order ? c.json(order, 200) : c.json({ error: "注文が見つかりません" }, 404);
   });
 }
 
@@ -61,9 +54,7 @@ function registerOrderLineRoutes(
       input.unitPriceYen,
       input.quantity,
     );
-    return order
-      ? c.json(PublicOrderSchema.parse(order), 200)
-      : c.json({ error: "注文が見つかりません" }, 404);
+    return order ? c.json(order, 200) : c.json({ error: "注文が見つかりません" }, 404);
   });
   app.openapi(changeOrderQuantityRoute, async (c) => {
     const db = c.get("db");
@@ -75,18 +66,14 @@ function registerOrderLineRoutes(
       input.lineId,
       c.req.valid("json").quantity,
     );
-    return order
-      ? c.json(PublicOrderSchema.parse(order), 200)
-      : c.json({ error: "注文が見つかりません" }, 404);
+    return order ? c.json(order, 200) : c.json({ error: "注文が見つかりません" }, 404);
   });
   app.openapi(removeOrderLineRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.orderRepositoryFactory.create(db.orders);
     const input = c.req.valid("param");
     const order = await dependencies.orderService.removeLine(repository, input.id, input.lineId);
-    return order
-      ? c.json(PublicOrderSchema.parse(order), 200)
-      : c.json({ error: "注文が見つかりません" }, 404);
+    return order ? c.json(order, 200) : c.json({ error: "注文が見つかりません" }, 404);
   });
 }
 

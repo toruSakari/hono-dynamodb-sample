@@ -31,8 +31,18 @@ const StoredUserSchema = z.strictObject({
   version: AggregateVersionSchema,
 });
 export type StoredUser = Readonly<z.infer<typeof StoredUserSchema>>;
-// 公開項目を許可リストで選ぶ。保存型に秘密情報が増えても自動公開されない。
-export type PublicUser = Readonly<Pick<StoredUser, "id" | "name" | "email" | "status" | "version">>;
+// 公開項目は許可リスト。z.objectは未知項目（passwordHash等）を取り除く。
+// readonlyで型と実行時の両方を凍結し、保存スキーマとは分離する。
+export const PublicUserSchema = z
+  .object({
+    id: UserIdSchema,
+    name: UserNameSchema,
+    email: EmailAddressSchema.nullable(),
+    status: UserStatusSchema,
+    version: AggregateVersionSchema,
+  })
+  .readonly();
+export type PublicUser = z.infer<typeof PublicUserSchema>;
 export type User = Readonly<{
   snapshot(): PublicUser;
   rename(name: UserName): User;
@@ -59,13 +69,7 @@ function build(input: unknown): User {
   const user = Object.freeze<User>({
     // 公開 DTO はハッシュを含まず、コピーも不変にする。
     snapshot(): PublicUser {
-      return Object.freeze({
-        id: state.id,
-        name: state.name,
-        email: state.email,
-        status: state.status,
-        version: state.version,
-      });
+      return PublicUserSchema.parse(state);
     },
     // 無効ユーザーのプロフィール変更を拒否し、新しい集約を返す。
     rename(name: UserName): User {

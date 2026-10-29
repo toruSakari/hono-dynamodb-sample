@@ -15,11 +15,17 @@ export const StoredOrderLineSchema = z.strictObject({
   quantity: QuantitySchema,
 });
 export type StoredOrderLine = Readonly<z.infer<typeof StoredOrderLineSchema>>;
-export type PublicOrderLine = Readonly<
-  Pick<StoredOrderLine, "id" | "productCode" | "unitPriceYen" | "quantity"> & {
-    lineTotalYen: number;
-  }
->;
+// 公開項目の許可リスト。保存用とは異なり、未知項目を除去して不変な DTO にする。
+export const PublicOrderLineSchema = z
+  .object({
+    id: OrderLineIdSchema,
+    productCode: ProductCodeSchema,
+    unitPriceYen: UnitPriceYenSchema,
+    quantity: QuantitySchema,
+    lineTotalYen: z.number().int().nonnegative().max(99_000_000),
+  })
+  .readonly();
+export type PublicOrderLine = z.infer<typeof PublicOrderLineSchema>;
 export type OrderLine = Readonly<{
   snapshot(): PublicOrderLine;
   changeQuantity(quantity: Quantity): OrderLine;
@@ -35,11 +41,8 @@ function build(input: unknown): OrderLine {
     },
     // 単価は注文時の値を保持する。合計金額は保存せず、常に数量から算出する。
     snapshot(): PublicOrderLine {
-      return Object.freeze({
-        id: state.id,
-        productCode: state.productCode,
-        unitPriceYen: state.unitPriceYen,
-        quantity: state.quantity,
+      return PublicOrderLineSchema.parse({
+        ...state,
         lineTotalYen: state.unitPriceYen * state.quantity,
       });
     },

@@ -196,7 +196,16 @@ void test("Order OpenAPIは6操作・入力制約・計算結果・状態を文�
   ]);
   assert.equal(readPath(schemas, "CreateOrder", "properties", "customerId", "format"), "uuid");
   assert.equal(
-    readPath(schemas, "PublicOrderLine", "properties", "lineTotalYen", "type"),
+    readPath(
+      schemas,
+      "PublicOrder",
+      "properties",
+      "lines",
+      "items",
+      "properties",
+      "lineTotalYen",
+      "type",
+    ),
     "integer",
   );
 });

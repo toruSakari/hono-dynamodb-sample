@@ -1,8 +1,7 @@
 import { UserNameSchema } from "../domain/value-objects/user-name.js";
 import { NewPasswordSchema } from "../domain/value-objects/new-password.js";
-import type { PublicUser } from "../domain/entities/user.js";
+import { User } from "../domain/entities/user.js";
 import { PublicUserSchema } from "./schemas/user-schemas.js";
-import { ErrorSchema } from "./schemas/common-schemas.js";
 import { readJson } from "./testing/http-test-helpers.js";
 import { MemoryOrderRepository } from "../testing/repositories/memory-order-repository.js";
 import type { UserRepository } from "../domain/repositories/user-repository.js";
@@ -37,7 +36,10 @@ void test("HTTP 登録・取得・改名は公開スナップショットのみ�
     json({ name: "サンプル", password: "demo-only-long-password" }),
   );
   assert.equal(created.status, 201);
-  const user = PublicUserSchema.parse(await readJson(created));
+  const rawCreated = await readJson(created);
+  assert(rawCreated !== null && typeof rawCreated === "object");
+  assert.deepEqual(Object.keys(rawCreated).sort(), ["email", "id", "name", "status", "version"]);
+  const user = PublicUserSchema.parse(rawCreated);
   assert.deepEqual(Object.keys(user).sort(), ["email", "id", "name", "status", "version"]);
   const fetched = await app.request("/users/" + user.id);
   assert.deepEqual(PublicUserSchema.parse(await readJson(fetched)), user);
@@ -157,7 +159,7 @@ void test("無効 User の HTTP 変更は409、管理者向け状態操作はHTT
   );
 });
 
-void test("不正なユースケースDTOの余分なpasswordHashを公開せず500へ変換する", async () => {
+void test("保存済みpasswordHashを含むUserからHTTPへ公開項目だけを返す", async () => {
   const users = MemoryUserRepository.create();
   const customer = await UserService.register(
     users,
@@ -165,17 +167,16 @@ void test("不正なユースケースDTOの余分なpasswordHashを公開せず
     UserNameSchema.parse("境界サンプル"),
     NewPasswordSchema.parse("demo-only-long-password"),
   );
-  const maliciousService = {
-    ...UserService,
-    async find(): Promise<PublicUser & { passwordHash: string }> {
-      return { ...customer, passwordHash: "must-not-leak" };
-    },
-  };
-  const app = createTestApp(
-    { userRepository: users, orderRepository: MemoryOrderRepository.create(), passwordHasher },
-    { userService: maliciousService },
-  );
+  const entity = await users.findById(customer.id);
+  assert(entity);
+  const stored = User.toPersistenceSnapshot(entity);
+  assert(stored.passwordHash.startsWith("$argon2id$"));
+  const app = makeApp(users);
   const response = await app.request("/users/" + customer.id);
-  assert.equal(response.status, 500);
-  assert.deepEqual(ErrorSchema.parse(await readJson(response)), { error: "内部エラーです" });
+  assert.equal(response.status, 200);
+  const raw = await readJson(response);
+  assert.deepEqual(raw, customer);
+  assert(raw !== null && typeof raw === "object");
+  assert.deepEqual(Object.keys(raw).sort(), ["email", "id", "name", "status", "version"]);
+  assert(!JSON.stringify(raw).includes(stored.passwordHash));
 });

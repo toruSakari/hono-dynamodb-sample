@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Order } from "./order.js";
+import { Order, PublicOrderSchema } from "./order.js";
 import { DomainRuleError } from "../errors/domain-rule-error.js";
 import { UserIdSchema } from "../value-objects/user-id.js";
 import type { UserId } from "../value-objects/user-id.js";
@@ -136,4 +136,32 @@ void test("型アサーションでブランド値を偽装しても生成・追
   assert.throws(() => order.addLine("invalid lowercase" as ProductCode, price, quantity));
   assert.throws(() => order.addLine(code, -1 as UnitPriceYen, quantity));
   assert.equal(ProductCodeSchema.parse(" BOOK_01 "), "BOOK_01");
+});
+
+void test("公開注文スキーマはルートと子の未知項目を除去し、配列まで不変にする", () => {
+  const order = Order.create(customerId).addLine(code, price, quantity);
+  const snapshot = order.snapshot();
+  const input = {
+    ...snapshot,
+    internalNote: "公開しない注文メモ",
+    lines: snapshot.lines.map((line) => ({ ...line, supplierCost: 100 })),
+  };
+  const projected = PublicOrderSchema.parse(input);
+  assert.deepEqual(projected, snapshot);
+  assert.equal("internalNote" in projected, false);
+  assert.equal("internalNote" in input, true);
+  const projectedLine = projected.lines[0];
+  assert(projectedLine);
+  assert.equal("supplierCost" in projectedLine, false);
+  assert(Object.isFrozen(projected));
+  assert(Object.isFrozen(projected.lines));
+  assert(Object.isFrozen(projectedLine));
+  assert.throws(() => Object.assign(projected.lines, { length: 0 }));
+  assert.throws(() => Object.assign(projectedLine, { quantity: 99 }));
+  const inputLine = input.lines[0];
+  assert(inputLine);
+  inputLine.quantity = QuantitySchema.parse(99);
+  input.lines.length = 0;
+  assert.equal(projected.lines[0]?.quantity, quantity);
+  assert.equal(projected.totalYen, 2400);
 });
