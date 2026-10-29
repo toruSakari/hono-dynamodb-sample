@@ -83,36 +83,31 @@ function build(input: StoredUser): User {
   return user;
 }
 
-// 生成時点で検証済みブランド値を要求し、実行時にも不正な型アサーションを防ぐ。
-async function createUser(
-  name: UserName, password: NewPassword, hasher: PasswordHasher, email?: EmailAddress,
-): Promise<User> {
-  const validName = UserNameSchema.parse(name);
-  const validEmail = email === undefined ? null : EmailAddressSchema.parse(email);
-  const secret = await createPassword(password, hasher);
-  return build({
-    id: UserIdSchema.parse(randomUUID()), name: validName, email: validEmail,
-    status: ActiveUserStatus, passwordHash: passwordHashForPersistence(secret), version: 0,
-  });
-}
-
-// DB の unknown を検証して復元する。保存済みハッシュを再ハッシュしない。
-function restoreUser(record: unknown): User {
-  return build(StoredUserSchema.parse(record));
-}
-
-// リポジトリ専用。HTTP 応答・ログに使用しない（プロセス内の権限制御ではない）。
-function persistenceSnapshot(user: User): StoredUser {
-  const state = persistence.get(user);
-  if (!state) throw new TypeError('正規の User エンティティではありません');
-  return Object.freeze({ ...state });
-}
-
 // エンティティの生成・復元・保存境界を一つの凍結した操作用オブジェクトへ集約する。
-// これはインスタンスの状態ではない。各 User の状態は引き続きクロージャ/WeakMapに閉じる。
-// toPersistenceSnapshot はリポジトリ専用で、公開 snapshot() と混同しない。
+// 各 User の状態は引き続きクロージャ/WeakMapに閉じる。
 export const User = Object.freeze({
-  create: createUser,
-  restore: restoreUser,
-  toPersistenceSnapshot: persistenceSnapshot,
+  // 検証済みブランド値を要求し、実行時にも不正な型アサーションを防ぐ。
+  async create(
+    name: UserName, password: NewPassword, hasher: PasswordHasher, email?: EmailAddress,
+  ): Promise<User> {
+    const validName = UserNameSchema.parse(name);
+    const validEmail = email === undefined ? null : EmailAddressSchema.parse(email);
+    const secret = await createPassword(password, hasher);
+    return build({
+      id: UserIdSchema.parse(randomUUID()), name: validName, email: validEmail,
+      status: ActiveUserStatus, passwordHash: passwordHashForPersistence(secret), version: 0,
+    });
+  },
+
+  // DB の unknown を検証して復元する。保存済みハッシュを再ハッシュしない。
+  restore(record: unknown): User {
+    return build(StoredUserSchema.parse(record));
+  },
+
+  // リポジトリ専用。公開 snapshot() と混同せず、HTTP 応答・ログに使用しない。
+  toPersistenceSnapshot(user: User): StoredUser {
+    const state = persistence.get(user);
+    if (!state) throw new TypeError('正規の User エンティティではありません');
+    return Object.freeze({ ...state });
+  },
 });
