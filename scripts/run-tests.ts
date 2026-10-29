@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 // シェルの glob や環境変数構文に依存せず、実装横のテストを収集する。
 const integration = process.argv.includes('--integration');
 const suffix = integration ? '.integration.ts' : '.test.ts';
-const files = readdirSync('src', { recursive: true })
+const files = readdirSync('src', { recursive: true, encoding: 'utf8' })
   .filter((path) => path.endsWith(suffix))
   .map((path) => join('src', path))
   .sort();

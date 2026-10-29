@@ -1,3 +1,5 @@
+import { createOrderService } from '../../application/order-service.js';
+import { memoryOrderRepository } from '../../testing/memory-order-repository.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createApp } from '../../app.js';
@@ -6,7 +8,10 @@ import { passwordHasher } from '../../infrastructure/password-hasher.js';
 import { memoryRepository } from '../../testing/memory-user-repository.js';
 import { ErrorSchema, PublicUserSchema } from './contracts.js';
 
-const makeApp = () => createApp(createUserService(memoryRepository(), passwordHasher));
+const makeApp = () => {
+  const users = memoryRepository();
+  return createApp(createUserService(users, passwordHasher), createOrderService(memoryOrderRepository(), users));
+};
 const json = (body: unknown) => ({
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
 });
@@ -18,7 +23,7 @@ test('ZodからOpenAPI 3.1を生成し、全API・公開DTO・入力専用パス
   const document = await response.json();
   assert.equal(document.openapi, '3.1.0');
   assert.deepEqual(Object.keys(document.paths).sort(), [
-    '/health', '/users', '/users/{id}', '/users/{id}/email', '/users/{id}/name', '/users/{id}/password',
+    '/health', '/orders', '/orders/{id}', '/orders/{id}/confirm', '/orders/{id}/lines', '/orders/{id}/lines/{lineId}', '/users', '/users/{id}', '/users/{id}/email', '/users/{id}/name', '/users/{id}/password',
   ]);
   const schemas = document.components.schemas;
   assert.deepEqual(Object.keys(schemas.PublicUser.properties).sort(), ['email', 'id', 'name', 'status', 'version']);

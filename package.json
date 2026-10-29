@@ -11,10 +11,10 @@
     "start": "node --import tsx src/server.ts",
     "db:init": "node --import tsx src/infrastructure/init-table.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/run-tests.mjs",
-    "test:integration": "node scripts/run-tests.mjs --integration",
+    "test": "node --import tsx scripts/run-tests.ts",
+    "test:integration": "node --import tsx scripts/run-tests.ts --integration",
     "check": "npm run check:style && npm run typecheck && npm test",
-    "check:style": "node scripts/check-no-destructuring.mjs"
+    "check:style": "node --import tsx scripts/check-no-destructuring.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1159.0",

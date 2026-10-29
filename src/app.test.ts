@@ -1,3 +1,6 @@
+import { createOrderService } from './application/order-service.js';
+import { memoryOrderRepository } from './testing/memory-order-repository.js';
+import type { UserRepository } from './domain/repositories/user-repository.js';
 import { UserIdSchema, PasswordCandidateSchema } from './domain/value-objects/index.js';
 import { createUserService } from './application/user-service.js';
 import assert from 'node:assert/strict';
@@ -7,11 +10,18 @@ import { passwordHasher } from './infrastructure/password-hasher.js';
 import { memoryRepository } from './testing/memory-user-repository.js';
 import { ConflictError } from './domain/repositories/user-repository.js';
 
+function makeApp(repository: UserRepository = memoryRepository()) {
+  return createApp(
+    createUserService(repository, passwordHasher),
+    createOrderService(memoryOrderRepository(), repository),
+  );
+}
+
 const json = (body: unknown) => ({
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
 });
 test('HTTP 登録・取得・改名は公開スナップショットのみ返す', async () => {
-  const app = createApp(createUserService(memoryRepository(), passwordHasher));
+  const app = makeApp();
   const created = await app.request('/users', json({ name: 'サンプル', password: 'demo-only-long-password' }));
   assert.equal(created.status, 201);
   const user = await created.json();
@@ -25,7 +35,7 @@ test('HTTP 登録・取得・改名は公開スナップショットのみ返す
   assert.deepEqual(await renamed.json(), { ...user, name: '新しい名前', version: 1 });
 });
 test('不正入力・不正JSON・未存在・巨大入力を区別する', async () => {
-  const app = createApp(createUserService(memoryRepository(), passwordHasher));
+  const app = makeApp();
   assert.equal((await app.request('/users', json({ name: '', password: 'short' }))).status, 400);
   assert.equal((await app.request('/users', { ...json({}), body: '{' })).status, 400);
   assert.equal((await app.request('/users/not-uuid')).status, 400);
@@ -34,10 +44,10 @@ test('不正入力・不正JSON・未存在・巨大入力を区別する', asyn
 });
 test('内部エラーの詳細を漏らさず、競合は409を返す', async () => {
   const repository = memoryRepository();
-  const app = createApp(createUserService({
+  const app = makeApp({
     ...repository, async findById() { throw new Error('secret-data'); },
     async insert() { throw new ConflictError('secret-data'); },
-  }, passwordHasher));
+  });
   const failure = await app.request('/users/00000000-0000-4000-8000-000000000000');
   assert.equal(failure.status, 500);
   assert(! (await failure.text()).includes('secret-data'));
@@ -47,7 +57,7 @@ test('内部エラーの詳細を漏らさず、競合は409を返す', async ()
 
 test('メールとパスワードを変更でき、誤った現在パスワードや不正入力は保存しない', async () => {
   const repository = memoryRepository();
-  const app = createApp(createUserService(repository, passwordHasher));
+  const app = makeApp(repository);
   const response = await app.request('/users', json({ name: '例', email: 'demo@example.com', password: 'demo-only-long-password' }));
   const user = await response.json();
   assert.equal(response.status, 201);
@@ -76,7 +86,7 @@ test('メールとパスワードを変更でき、誤った現在パスワー�
 
 test('無効 User の HTTP 変更は409、管理者向け状態操作はHTTP非公開', async () => {
   const repository = memoryRepository();
-  const app = createApp(createUserService(repository, passwordHasher));
+  const app = makeApp(repository);
   const response = await app.request('/users', json({ name: '例', password: 'demo-only-long-password' }));
   const user = await response.json();
   const stored = await repository.findById(UserIdSchema.parse(user.id));

@@ -1,3 +1,5 @@
+import { createOrderService } from '../../application/order-service.js';
+import { memoryOrderRepository } from '../../testing/memory-order-repository.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createApp } from '../../app.js';
@@ -6,10 +8,11 @@ import { passwordHasher } from '../../infrastructure/password-hasher.js';
 import { memoryRepository } from '../../testing/memory-user-repository.js';
 
 test('手動DIした相関IDと時計を使い、成功・エラーにも安全な共通ヘッダを付ける', async () => {
-  const service = createUserService(memoryRepository(), passwordHasher);
+  const users = memoryRepository();
+  const service = createUserService(users, passwordHasher);
   let clock = 0;
   let id = 0;
-  const app = createApp(service, {
+  const app = createApp(service, createOrderService(memoryOrderRepository(), users), {
     newRequestId: () => '00000000-0000-4000-8000-' + String(++id).padStart(12, '0'),
     now: () => { clock += 2; return clock; },
   });
@@ -36,7 +39,7 @@ test('下位層の例外も機密を漏らさず500と共通ヘッダに変換�
   const repository = memoryRepository();
   const app = createApp(createUserService({
     ...repository, async findById() { throw new Error('do-not-expose-password-or-record'); },
-  }, passwordHasher));
+  }, passwordHasher), createOrderService(memoryOrderRepository(), repository));
   const response = await app.request('/users/00000000-0000-4000-8000-000000000000');
   assert.equal(response.status, 500);
   assert.deepEqual(await response.json(), { error: '内部エラーです' });

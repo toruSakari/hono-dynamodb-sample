@@ -3,6 +3,7 @@ import { OpenAPIHono } from '@hono/zod-openapi';
 import { swaggerUI } from '@hono/swagger-ui';
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
+import type { createOrderService } from './application/order-service.js';
 import type { createUserService } from './application/user-service.js';
 import { DomainRuleError, InvalidCurrentPasswordError } from './domain/errors/domain-rule-error.js';
 import { ConflictError } from './domain/repositories/user-repository.js';
@@ -11,10 +12,13 @@ import {
   healthRoute, createUserRoute, getUserRoute, renameRoute, changeEmailRoute, changePasswordRoute,
 } from './presentation/http/contracts.js';
 
+import { PublicOrderSchema, createOrderRoute, getOrderRoute, addOrderLineRoute, changeOrderQuantityRoute, removeOrderLineRoute, confirmOrderRoute } from './presentation/http/order-contracts.js';
+
 // 手動 DI: composition root がユースケースを組み立てて渡す。
 // HTTP 層は Repository / ハッシュ実装を生成しない。認証・認可は未実装、外部公開禁止。
 export function createApp(
   service: ReturnType<typeof createUserService>,
+  orderService: ReturnType<typeof createOrderService>,
   contextDependencies: RequestContextDependencies = { newRequestId: randomUUID, now: () => performance.now() },
 ) {
   const app = new OpenAPIHono<HttpEnvironment>({
@@ -50,10 +54,37 @@ export function createApp(
     const user = await service.changePassword(c.req.valid('param').id, input.currentPassword, input.newPassword);
     return user ? c.json(user, 200) : c.json({ error: '見つかりません' }, 404);
   });
+  app.openapi(createOrderRoute, async (c) => {
+    const order = await orderService.create(c.req.valid('json').customerId);
+    return order ? c.json(PublicOrderSchema.parse(order), 201) : c.json({ error: '顧客が見つかりません' }, 404);
+  });
+  app.openapi(getOrderRoute, async (c) => {
+    const order = await orderService.find(c.req.valid('param').id);
+    return order ? c.json(PublicOrderSchema.parse(order), 200) : c.json({ error: '注文が見つかりません' }, 404);
+  });
+  app.openapi(addOrderLineRoute, async (c) => {
+    const input = c.req.valid('json');
+    const order = await orderService.addLine(c.req.valid('param').id, input.productCode, input.unitPriceYen, input.quantity);
+    return order ? c.json(PublicOrderSchema.parse(order), 200) : c.json({ error: '注文が見つかりません' }, 404);
+  });
+  app.openapi(changeOrderQuantityRoute, async (c) => {
+    const input = c.req.valid('param');
+    const order = await orderService.changeQuantity(input.id, input.lineId, c.req.valid('json').quantity);
+    return order ? c.json(PublicOrderSchema.parse(order), 200) : c.json({ error: '注文が見つかりません' }, 404);
+  });
+  app.openapi(removeOrderLineRoute, async (c) => {
+    const input = c.req.valid('param');
+    const order = await orderService.removeLine(input.id, input.lineId);
+    return order ? c.json(PublicOrderSchema.parse(order), 200) : c.json({ error: '注文が見つかりません' }, 404);
+  });
+  app.openapi(confirmOrderRoute, async (c) => {
+    const order = await orderService.confirm(c.req.valid('param').id);
+    return order ? c.json(PublicOrderSchema.parse(order), 200) : c.json({ error: '注文が見つかりません' }, 404);
+  });
   app.doc31('/openapi.json', {
     openapi: '3.1.0',
     info: {
-      version: '1.1.0', title: 'DDD User Sample API',
+      version: '1.2.0', title: 'DDD User and Order Sample API',
       description: 'Hono + Zod + ElectroDB のローカル学習用API。認証・認可・レート制限未実装。実情報の入力・外部公開は禁止。',
     },
     servers: [{ url: 'http://127.0.0.1:3000', description: 'ローカル専用' }],

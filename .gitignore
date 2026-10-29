@@ -8,3 +8,8 @@ data/
 
 # DynamoDB Local の実行メタデータ
 dynamodb-local-metadata.json
+
+# 管理対象はTypeScriptのみ（JS生成物は公開しない）
+*.js
+*.mjs
+*.cjs

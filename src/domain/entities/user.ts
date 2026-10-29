@@ -3,8 +3,8 @@ import { z } from 'zod';
 import {
   UserIdSchema, UserNameSchema, EmailAddressSchema, UserStatusSchema,
   ActiveUserStatus, DisabledUserStatus, PasswordCandidateSchema,
-  type NewPassword, type PasswordCandidate, type UserId, type UserName,
-  type EmailAddress, type UserStatus,
+  type NewPassword, type PasswordCandidate, type UserName,
+  type EmailAddress,
 } from '../value-objects/index.js';
 import { PasswordHashSchema } from '../value-objects/password-hash.js';
 import { createPassword, restorePassword, passwordHashForPersistence } from '../value-objects/password.js';
@@ -21,9 +21,8 @@ const StoredUserSchema = z.strictObject({
   version: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER - 1),
 });
 export type StoredUser = Readonly<z.infer<typeof StoredUserSchema>>;
-export type PublicUser = Readonly<{
-  id: UserId; name: UserName; email: EmailAddress | null; status: UserStatus; version: number;
-}>;
+// 公開項目を許可リストで選ぶ。保存型に秘密情報が増えても自動公開されない。
+export type PublicUser = Readonly<Pick<StoredUser, 'id' | 'name' | 'email' | 'status' | 'version'>>;
 export type User = Readonly<{
   snapshot(): PublicUser;
   rename(name: UserName): User;
