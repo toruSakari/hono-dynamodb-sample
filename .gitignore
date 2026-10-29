@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.*
+!.env.example
+coverage/
+data/
+*.log
+
+# DynamoDB Local の実行メタデータ
+dynamodb-local-metadata.json
