@@ -4,11 +4,10 @@ import type { PublicUser } from "../domain/entities/user.js";
 import { PublicUserSchema } from "./schemas/user-schemas.js";
 import { ErrorSchema } from "./schemas/common-schemas.js";
 import { readJson } from "./testing/http-test-helpers.js";
-import { createOrderService } from "../application/use-cases/order-service.js";
 import { createMemoryOrderRepository } from "../testing/repositories/memory-order-repository.js";
 import type { UserRepository } from "../domain/repositories/user-repository.js";
 import { UserIdSchema, PasswordCandidateSchema } from "../domain/value-objects/index.js";
-import { createUserService } from "../application/use-cases/user-service.js";
+import { UserService } from "../application/use-cases/user-service.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createApp } from "./app.js";
@@ -19,10 +18,11 @@ import { ConflictError } from "../domain/errors/conflict-error.js";
 function makeApp(
   repository: UserRepository = createMemoryUserRepository(),
 ): ReturnType<typeof createApp> {
-  return createApp(
-    createUserService(repository, passwordHasher),
-    createOrderService(createMemoryOrderRepository(), repository),
-  );
+  return createApp({
+    userRepository: repository,
+    orderRepository: createMemoryOrderRepository(),
+    passwordHasher,
+  });
 }
 
 const json = (body: unknown): RequestInit => ({
@@ -159,18 +159,22 @@ void test("無効 User の HTTP 変更は409、管理者向け状態操作はHTT
 
 void test("不正なユースケースDTOの余分なpasswordHashを公開せず500へ変換する", async () => {
   const users = createMemoryUserRepository();
-  const service = createUserService(users, passwordHasher);
-  const customer = await service.register(
+  const customer = await UserService.register(
+    users,
+    passwordHasher,
     UserNameSchema.parse("境界サンプル"),
     NewPasswordSchema.parse("demo-only-long-password"),
   );
   const maliciousService = {
-    ...service,
+    ...UserService,
     async find(): Promise<PublicUser & { passwordHash: string }> {
       return { ...customer, passwordHash: "must-not-leak" };
     },
   };
-  const app = createApp(maliciousService, createOrderService(createMemoryOrderRepository(), users));
+  const app = createApp(
+    { userRepository: users, orderRepository: createMemoryOrderRepository(), passwordHasher },
+    { userService: maliciousService },
+  );
   const response = await app.request("/users/" + customer.id);
   assert.equal(response.status, 500);
   assert.deepEqual(ErrorSchema.parse(await readJson(response)), { error: "内部エラーです" });

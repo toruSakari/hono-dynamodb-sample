@@ -5,8 +5,6 @@ import { readJson, readPath } from "../testing/http-test-helpers.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createApp } from "../app.js";
-import { createUserService } from "../../application/use-cases/user-service.js";
-import { createOrderService } from "../../application/use-cases/order-service.js";
 import { createMemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
 import { createMemoryOrderRepository } from "../../testing/repositories/memory-order-repository.js";
 import { passwordHasher } from "../../infrastructure/security/argon2-password-hasher.js";
@@ -30,7 +28,7 @@ function setup(): {
   return {
     users,
     orders,
-    app: createApp(createUserService(users, passwordHasher), createOrderService(orders, users)),
+    app: createApp({ userRepository: users, orderRepository: orders, passwordHasher }),
   };
 }
 
@@ -152,19 +150,17 @@ void test("注文Repositoryの競合は409として返し、自動リトライ�
   const users = createMemoryUserRepository();
   const orders = createMemoryOrderRepository();
   let writes = 0;
-  const app = createApp(
-    createUserService(users, passwordHasher),
-    createOrderService(
-      {
-        ...orders,
-        async insert(): Promise<void> {
-          writes += 1;
-          throw new ConflictError("do-not-expose");
-        },
+  const app = createApp({
+    userRepository: users,
+    passwordHasher,
+    orderRepository: {
+      ...orders,
+      async insert(): Promise<void> {
+        writes += 1;
+        throw new ConflictError("do-not-expose");
       },
-      users,
-    ),
-  );
+    },
+  });
   const customer = PublicUserSchema.parse(
     await readJson(
       await app.request("/users", request({ name: "顧客", password: "demo-only-long-password" })),

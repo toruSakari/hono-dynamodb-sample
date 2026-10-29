@@ -42,7 +42,6 @@ export default defineConfig({
         // 型ルールは緩めず、この構造だけ長さの警告基準を調整する。
         files: [
           "src/domain/entities/*.ts",
-          "src/application/use-cases/*-service.ts",
           "src/infrastructure/dynamodb/repositories/*-repository.ts",
         ],
         rules: {

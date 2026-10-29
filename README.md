@@ -112,8 +112,8 @@ vite.config.ts                  Vite+のformat / 型付きlint設定
 User 集約が判定し、ユースケースが取得/保存を調整し、HTTP 層がステータスへ変換します。
 
 `src/bootstrap/server.ts` が **Composition Root** です。DI コンテナを使わず、
-DynamoDB client → User/OrderのElectroDB Repository → UserService/OrderService → Hono app の順で手動で組み立てます。
-`createApp(userService, orderService)` にテスト用サービスを注入でき、相関 ID 生成と時計もテストで差し替えられます。
+DynamoDB clientからUser/OrderのRepositoryを生成し、Hasherとともに `createApp(dependencies)` へ渡します。
+HTTPハンドラーはその依存を `UserService` / `OrderService` の各メソッドへ渡します。テストでは `createApp` の第2引数でサービスや相関 ID 生成・時計を差し替えられます。
 domain / application は Hono の Context を参照しません。
 
 ## ElectroDB の役割
@@ -351,3 +351,14 @@ OpenAPI 公式参考:
 - DynamoDB Repositoryの共通部分は、同じディレクトリの `repository-support.ts` にまとめています。version遷移検証・条件不一致の例外変換・raw応答形式だけが対象です。
 - `create` / 条件付き `put` は各Repositoryに残し、モデルの型やOrder専用のサイズ制限をその場で読めるようにしています。
 - Entityの基底クラスや汎用factoryは作りません。Userの状態ルール、Orderの明細整合性、Passwordの秘密状態は別々に保ちます。Orderの深い凍結は同じファイル内の関数で再利用します。
+
+### Serviceは直接オブジェクトとして使う
+
+`UserService` / `OrderService` は `Object.freeze` した操作オブジェクトです。生成関数や共通updateを挟まず、各メソッドにRepositoryやHasherを渡します。各操作に取得・ドメイン操作・保存を明記し、競合時も自動でやり直しません。
+
+```ts
+const user = await UserService.rename(userRepository, userId, validatedName);
+const order = await OrderService.confirm(orderRepository, orderId);
+```
+
+手動DIの組立場所は `bootstrap/server.ts` です。HTTP層は渡された依存をServiceへ渡すだけで、DynamoDBやハッシュ実装を生成しません。

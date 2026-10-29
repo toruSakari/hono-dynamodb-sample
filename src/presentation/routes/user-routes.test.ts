@@ -1,9 +1,7 @@
-import { createOrderService } from "../../application/use-cases/order-service.js";
 import { createMemoryOrderRepository } from "../../testing/repositories/memory-order-repository.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createApp } from "../app.js";
-import { createUserService } from "../../application/use-cases/user-service.js";
 import { passwordHasher } from "../../infrastructure/security/argon2-password-hasher.js";
 import { createMemoryUserRepository } from "../../testing/repositories/memory-user-repository.js";
 import { ErrorSchema } from "../schemas/common-schemas.js";
@@ -12,10 +10,11 @@ import { readJson, readPath, readObject } from "../testing/http-test-helpers.js"
 
 const makeApp = (): ReturnType<typeof createApp> => {
   const users = createMemoryUserRepository();
-  return createApp(
-    createUserService(users, passwordHasher),
-    createOrderService(createMemoryOrderRepository(), users),
-  );
+  return createApp({
+    userRepository: users,
+    orderRepository: createMemoryOrderRepository(),
+    passwordHasher,
+  });
 };
 const json = (body: unknown): RequestInit => ({
   method: "POST",
