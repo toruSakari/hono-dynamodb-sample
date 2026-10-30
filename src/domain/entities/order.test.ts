@@ -3,13 +3,10 @@ import { test } from "node:test";
 import { Order, PublicOrderSchema } from "./order.js";
 import { DomainRuleError } from "../errors/domain-rule-error.js";
 import { UserIdSchema } from "../value-objects/user-id.js";
-import type { UserId } from "../value-objects/user-id.js";
 import { OrderLineIdSchema } from "../value-objects/order-line-id.js";
 import { ProductCodeSchema } from "../value-objects/product-code.js";
-import type { ProductCode } from "../value-objects/product-code.js";
 import { QuantitySchema } from "../value-objects/quantity.js";
 import { UnitPriceYenSchema } from "../value-objects/unit-price-yen.js";
-import type { UnitPriceYen } from "../value-objects/unit-price-yen.js";
 
 const customerId = UserIdSchema.parse("00000000-0000-4000-8000-000000000001");
 const code = ProductCodeSchema.parse("BOOK_01");
@@ -130,12 +127,14 @@ void test("DB 復元は子だけでなく集約全体の不変条件と未知項
   assert.deepEqual(Order.restore(record).snapshot(), order.snapshot());
 });
 
-void test("型アサーションでブランド値を偽装しても生成・追加時に再検証する", () => {
-  assert.throws(() => Order.create("invalid" as UserId));
-  const order = Order.create(customerId);
-  assert.throws(() => order.addLine("invalid lowercase" as ProductCode, price, quantity));
-  assert.throws(() => order.addLine(code, -1 as UnitPriceYen, quantity));
-  assert.equal(ProductCodeSchema.parse(" BOOK_01 "), "BOOK_01");
+void test("注文の入力境界で不正値を拒否し、正規化済み商品コードを渡す", () => {
+  assert.throws(() => UserIdSchema.parse("invalid"));
+  assert.throws(() => ProductCodeSchema.parse("invalid lowercase"));
+  assert.throws(() => UnitPriceYenSchema.parse(-1));
+  const normalized = ProductCodeSchema.parse(" BOOK_01 ");
+  const order = Order.create(customerId).addLine(normalized, price, quantity);
+  assert.equal(order.snapshot().lines[0]?.productCode, "BOOK_01");
+  assert.throws(() => order.addLine(code, price, quantity), DomainRuleError);
 });
 
 void test("公開注文スキーマはルートと子の未知項目を除去し、配列まで不変にする", () => {

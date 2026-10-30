@@ -8,7 +8,6 @@ import {
   UserStatusSchema,
   ActiveUserStatus,
   DisabledUserStatus,
-  PasswordCandidateSchema,
 } from "../value-objects/index.js";
 import type {
   NewPassword,
@@ -60,7 +59,7 @@ export type User = Readonly<{
 type UserState = Readonly<Omit<StoredUser, "passwordHash"> & { password: Password }>;
 const states = new WeakMap<User, UserState>();
 
-// 入力は生成・復元・各ドメイン操作で検証済み。更新時もバージョン上限を保証する。
+// ブランド値は入力境界で検証済み。内部で増やすバージョンの上限だけ確認する。
 function build(input: UserState): User {
   const state: UserState = Object.freeze({
     ...input,
@@ -79,14 +78,14 @@ function build(input: UserState): User {
     // 無効ユーザーのプロフィール変更を拒否し、新しい集約を返す。
     rename(name: UserName): User {
       requireActive();
-      return build({ ...state, name: UserNameSchema.parse(name), version: state.version + 1 });
+      return build({ ...state, name, version: state.version + 1 });
     },
-    // アドレスの構文だけを検証する。所有権確認済みという意味にはしない。
+    // 構文検証済みのアドレスを受け取る。所有権確認済みという意味にはしない。
     changeEmail(email: EmailAddress): User {
       requireActive();
       return build({
         ...state,
-        email: EmailAddressSchema.parse(email),
+        email,
         version: state.version + 1,
       });
     },
@@ -121,8 +120,7 @@ function build(input: UserState): User {
     },
     // 無効ユーザーは、正しいパスワードでも認証可能と判定しない。
     async verifyPassword(candidate: PasswordCandidate, hasher: PasswordHasher): Promise<boolean> {
-      const valid = PasswordCandidateSchema.parse(candidate);
-      return state.status === "active" && (await state.password.matches(valid, hasher));
+      return state.status === "active" && (await state.password.matches(candidate, hasher));
     },
   });
   states.set(user, state);
@@ -132,20 +130,18 @@ function build(input: UserState): User {
 // エンティティの生成・復元・保存境界を一つの凍結した操作用オブジェクトへ集約する。
 // 各 User の状態は引き続きクロージャ/WeakMapに閉じる。
 export const User = Object.freeze({
-  // 検証済みブランド値を要求し、実行時にも不正な型アサーションを防ぐ。
+  // 入力境界で検証済みのブランド値を受け取る。内部では再parseしない。
   async create(
     name: UserName,
     password: NewPassword,
     hasher: PasswordHasher,
     email?: EmailAddress,
   ): Promise<User> {
-    const validName = UserNameSchema.parse(name);
-    const validEmail = email === undefined ? null : EmailAddressSchema.parse(email);
     const secret = await Password.create(password, hasher);
     return build({
       id: UserIdSchema.parse(randomUUID()),
-      name: validName,
-      email: validEmail,
+      name,
+      email: email ?? null,
       status: ActiveUserStatus,
       password: secret,
       version: 0,

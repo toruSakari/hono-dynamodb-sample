@@ -5,11 +5,8 @@ import { DomainRuleError } from "../errors/domain-rule-error.js";
 import { UserIdSchema } from "../value-objects/user-id.js";
 import type { UserId } from "../value-objects/user-id.js";
 import { OrderIdSchema } from "../value-objects/order-id.js";
-import { OrderLineIdSchema } from "../value-objects/order-line-id.js";
 import type { OrderLineId } from "../value-objects/order-line-id.js";
-import { ProductCodeSchema } from "../value-objects/product-code.js";
 import type { ProductCode } from "../value-objects/product-code.js";
-import { QuantitySchema } from "../value-objects/quantity.js";
 import type { Quantity } from "../value-objects/quantity.js";
 import type { UnitPriceYen } from "../value-objects/unit-price-yen.js";
 import {
@@ -79,8 +76,7 @@ function build(input: OrderState): Order {
       throw new DomainRuleError("確定した注文は変更できません");
     }
   };
-  const requireLine = (inputId: OrderLineId): OrderLine => {
-    const id = OrderLineIdSchema.parse(inputId);
+  const requireLine = (id: OrderLineId): OrderLine => {
     const line = state.lines.find((candidate) => candidate.snapshot().id === id);
     if (!line) {
       throw new DomainRuleError("注文内に対象の明細がありません");
@@ -100,14 +96,13 @@ function build(input: OrderState): Order {
     // 同一商品の重複・20明細超をルートで防ぐ。子だけでは判定できない集約ルール。
     addLine(productCode: ProductCode, unitPriceYen: UnitPriceYen, quantity: Quantity): Order {
       requireDraft();
-      const validCode = ProductCodeSchema.parse(productCode);
       if (state.lines.length >= 20) {
         throw new DomainRuleError("注文は20明細までです");
       }
-      if (state.lines.some((line) => line.snapshot().productCode === validCode)) {
+      if (state.lines.some((line) => line.snapshot().productCode === productCode)) {
         throw new DomainRuleError("同じ商品は数量変更で更新してください");
       }
-      const added = OrderLine.create(validCode, unitPriceYen, quantity);
+      const added = OrderLine.create(productCode, unitPriceYen, quantity);
       return build({
         ...state,
         version: state.version + 1,
@@ -118,7 +113,7 @@ function build(input: OrderState): Order {
     changeQuantity(lineId: OrderLineId, quantity: Quantity): Order {
       requireDraft();
       const existing = requireLine(lineId);
-      const changed = existing.changeQuantity(QuantitySchema.parse(quantity));
+      const changed = existing.changeQuantity(quantity);
       return build({
         ...state,
         version: state.version + 1,
@@ -153,7 +148,7 @@ export const Order = Object.freeze({
   create(customerId: UserId): Order {
     return build({
       id: OrderIdSchema.parse(randomUUID()),
-      customerId: UserIdSchema.parse(customerId),
+      customerId,
       status: DraftOrderStatus,
       version: 0,
       lines: [],

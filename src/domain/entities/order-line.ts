@@ -32,12 +32,12 @@ export type OrderLine = Readonly<{
 }>;
 const persistence = new WeakMap<OrderLine, StoredOrderLine>();
 
-function build(input: unknown): OrderLine {
-  const state = Object.freeze(StoredOrderLineSchema.parse(input));
+function build(input: StoredOrderLine): OrderLine {
+  const state = Object.freeze({ ...input });
   const line = Object.freeze<OrderLine>({
     // ID を持つ子エンティティ。変更前後で同一性を保ち、値だけを新しくする。
     changeQuantity(quantity: Quantity): OrderLine {
-      return build({ ...state, quantity: QuantitySchema.parse(quantity) });
+      return build({ ...state, quantity });
     },
     // 単価は注文時の値を保持する。合計金額は保存せず、常に数量から算出する。
     snapshot(): PublicOrderLine {
@@ -62,7 +62,7 @@ export const OrderLine = Object.freeze({
     });
   },
   restore(record: unknown): OrderLine {
-    return build(record);
+    return build(StoredOrderLineSchema.parse(record));
   },
   toPersistenceSnapshot(line: OrderLine): StoredOrderLine {
     const state = persistence.get(line);

@@ -3,7 +3,6 @@ import { test } from "node:test";
 import { OrderLine, PublicOrderLineSchema } from "./order-line.js";
 import { ProductCodeSchema } from "../value-objects/product-code.js";
 import { QuantitySchema } from "../value-objects/quantity.js";
-import type { Quantity } from "../value-objects/quantity.js";
 import { UnitPriceYenSchema } from "../value-objects/unit-price-yen.js";
 
 void test("OrderLine は数量変更後も ID を保ち、元の子エンティティを変更しない", () => {
@@ -23,8 +22,8 @@ void test("OrderLine は数量変更後も ID を保ち、元の子エンティ�
   assert(Object.isFrozen(line));
   assert(Object.isFrozen(line.snapshot()));
   assert.equal(JSON.stringify(line), "{}");
-  // 故意にブランド/インスタンス型を偽装し、実行時検証が迂回できないことを確認する。
-  assert.throws(() => line.changeQuantity(0 as Quantity));
+  // 不正な数量は子エンティティに渡す前のVO境界で拒否する。
+  assert.throws(() => QuantitySchema.parse(0));
 });
 
 void test("OrderLine の復元は子の全項目を検証し、派生金額や未知項目を保存しない", () => {

@@ -76,9 +76,9 @@ void test("同じパスワードでも異なるソルトで保存される", asy
   const b = await passwordHasher.hash(password);
   assert.notEqual(a, b);
 });
-void test("不正な型アサーションでも集約生成境界の検証を迂回できない", async () => {
-  await assert.rejects(User.create("" as typeof name, password, passwordHasher));
-  await assert.rejects(User.create(name, "short" as typeof password, passwordHasher));
+void test("User に渡す名前と新規パスワードは入力境界で検証する", () => {
+  assert.throws(() => UserNameSchema.parse(""));
+  assert.throws(() => NewPasswordSchema.parse("short"));
 });
 
 void test("メール変更は元の User を変えず、状態遷移は不正な操作を拒否する", async () => {
