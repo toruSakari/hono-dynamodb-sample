@@ -16,25 +16,26 @@ function registerOrderLifecycleRoutes(
 ): void {
   app.openapi(createOrderRoute, async (c) => {
     const db = c.get("db");
-    const userRepository = dependencies.userRepositoryFactory.create(db.users);
     const repository = dependencies.orderRepositoryFactory.create(db.orders);
-    const order = await dependencies.orderService.create(
-      repository,
-      userRepository,
-      c.req.valid("json").customerId,
-    );
+    const userRepository = dependencies.userRepositoryFactory.create(db.users);
+    const service = dependencies.orderServiceFactory.create(repository, userRepository);
+    const order = await service.create(c.req.valid("json").customerId);
     return order ? c.json(order, 201) : c.json({ error: "顧客が見つかりません" }, 404);
   });
   app.openapi(getOrderRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.orderRepositoryFactory.create(db.orders);
-    const order = await dependencies.orderService.find(repository, c.req.valid("param").id);
+    const userRepository = dependencies.userRepositoryFactory.create(db.users);
+    const service = dependencies.orderServiceFactory.create(repository, userRepository);
+    const order = await service.find(c.req.valid("param").id);
     return order ? c.json(order, 200) : c.json({ error: "注文が見つかりません" }, 404);
   });
   app.openapi(confirmOrderRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.orderRepositoryFactory.create(db.orders);
-    const order = await dependencies.orderService.confirm(repository, c.req.valid("param").id);
+    const userRepository = dependencies.userRepositoryFactory.create(db.users);
+    const service = dependencies.orderServiceFactory.create(repository, userRepository);
+    const order = await service.confirm(c.req.valid("param").id);
     return order ? c.json(order, 200) : c.json({ error: "注文が見つかりません" }, 404);
   });
 }
@@ -46,9 +47,10 @@ function registerOrderLineRoutes(
   app.openapi(addOrderLineRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.orderRepositoryFactory.create(db.orders);
+    const userRepository = dependencies.userRepositoryFactory.create(db.users);
+    const service = dependencies.orderServiceFactory.create(repository, userRepository);
     const input = c.req.valid("json");
-    const order = await dependencies.orderService.addLine(
-      repository,
+    const order = await service.addLine(
       c.req.valid("param").id,
       input.productCode,
       input.unitPriceYen,
@@ -59,9 +61,10 @@ function registerOrderLineRoutes(
   app.openapi(changeOrderQuantityRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.orderRepositoryFactory.create(db.orders);
+    const userRepository = dependencies.userRepositoryFactory.create(db.users);
+    const service = dependencies.orderServiceFactory.create(repository, userRepository);
     const input = c.req.valid("param");
-    const order = await dependencies.orderService.changeQuantity(
-      repository,
+    const order = await service.changeQuantity(
       input.id,
       input.lineId,
       c.req.valid("json").quantity,
@@ -71,8 +74,10 @@ function registerOrderLineRoutes(
   app.openapi(removeOrderLineRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.orderRepositoryFactory.create(db.orders);
+    const userRepository = dependencies.userRepositoryFactory.create(db.users);
+    const service = dependencies.orderServiceFactory.create(repository, userRepository);
     const input = c.req.valid("param");
-    const order = await dependencies.orderService.removeLine(repository, input.id, input.lineId);
+    const order = await service.removeLine(input.id, input.lineId);
     return order ? c.json(order, 200) : c.json({ error: "注文が見つかりません" }, 404);
   });
 }

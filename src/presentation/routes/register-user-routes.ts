@@ -16,22 +16,15 @@ function registerUserReadRoutes(
   app.openapi(createUserRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.userRepositoryFactory.create(db.users);
+    const service = dependencies.userServiceFactory.create(repository, dependencies.passwordHasher);
     const input = c.req.valid("json");
-    return c.json(
-      await dependencies.userService.register(
-        repository,
-        dependencies.passwordHasher,
-        input.name,
-        input.password,
-        input.email,
-      ),
-      201,
-    );
+    return c.json(await service.register(input.name, input.password, input.email), 201);
   });
   app.openapi(getUserRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.userRepositoryFactory.create(db.users);
-    const user = await dependencies.userService.find(repository, c.req.valid("param").id);
+    const service = dependencies.userServiceFactory.create(repository, dependencies.passwordHasher);
+    const user = await service.find(c.req.valid("param").id);
     return user ? c.json(user, 200) : c.json({ error: "見つかりません" }, 404);
   });
 }
@@ -43,30 +36,23 @@ function registerUserMutationRoutes(
   app.openapi(renameRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.userRepositoryFactory.create(db.users);
-    const user = await dependencies.userService.rename(
-      repository,
-      c.req.valid("param").id,
-      c.req.valid("json").name,
-    );
+    const service = dependencies.userServiceFactory.create(repository, dependencies.passwordHasher);
+    const user = await service.rename(c.req.valid("param").id, c.req.valid("json").name);
     return user ? c.json(user, 200) : c.json({ error: "見つかりません" }, 404);
   });
   app.openapi(changeEmailRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.userRepositoryFactory.create(db.users);
-    const user = await dependencies.userService.changeEmail(
-      repository,
-      c.req.valid("param").id,
-      c.req.valid("json").email,
-    );
+    const service = dependencies.userServiceFactory.create(repository, dependencies.passwordHasher);
+    const user = await service.changeEmail(c.req.valid("param").id, c.req.valid("json").email);
     return user ? c.json(user, 200) : c.json({ error: "見つかりません" }, 404);
   });
   app.openapi(changePasswordRoute, async (c) => {
     const db = c.get("db");
     const repository = dependencies.userRepositoryFactory.create(db.users);
+    const service = dependencies.userServiceFactory.create(repository, dependencies.passwordHasher);
     const input = c.req.valid("json");
-    const user = await dependencies.userService.changePassword(
-      repository,
-      dependencies.passwordHasher,
+    const user = await service.changePassword(
       c.req.valid("param").id,
       input.currentPassword,
       input.newPassword,

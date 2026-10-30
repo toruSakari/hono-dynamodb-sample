@@ -1,3 +1,6 @@
+import type { PasswordHasher } from "../../domain/services/password-hasher.js";
+import type { UserId } from "../../domain/value-objects/user-id.js";
+import type { OrderId } from "../../domain/value-objects/order-id.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createApp } from "../app.js";
@@ -14,11 +17,20 @@ import { OrderService } from "../../application/use-cases/order-service.js";
 import type { PublicUser } from "../../domain/entities/user.js";
 import type { PublicOrder } from "../../domain/entities/order.js";
 
-void test("controllerはContext内の該当モデルだけをfactoryへ渡し、Serviceには生成Repositoryだけを渡す", async () => {
+void test("controllerはモデルからRepositoryを作り、Service factoryへ依存を一度渡して業務引数だけで操作する", async () => {
   const db = createTestDatabase();
   const users = MemoryUserRepository.create();
   const orders = MemoryOrderRepository.create();
-  const calls = { userFactory: 0, orderFactory: 0, userFind: 0, orderFind: 0, orderCreate: 0 };
+  const id = "00000000-0000-4000-8000-000000000000";
+  const calls = {
+    userFactory: 0,
+    orderFactory: 0,
+    userServiceFactory: 0,
+    orderServiceFactory: 0,
+    userFind: 0,
+    orderFind: 0,
+    orderCreate: 0,
+  };
   const app = createApp(
     { db, passwordHasher },
     {
@@ -36,38 +48,47 @@ void test("controllerはContext内の該当モデルだけをfactoryへ渡し、
           return orders;
         },
       },
-      userService: {
-        ...UserService,
-        async find(repository: UserRepository): Promise<PublicUser | null> {
+      userServiceFactory: {
+        create(repository: UserRepository, hasher: PasswordHasher): UserService {
           assert.equal(repository, users);
-          calls.userFind += 1;
-          return null;
+          assert.equal(hasher, passwordHasher);
+          calls.userServiceFactory += 1;
+          return Object.freeze({
+            ...UserService.create(repository, hasher),
+            async find(userId: UserId): Promise<PublicUser | null> {
+              assert.equal(userId, id);
+              calls.userFind += 1;
+              return null;
+            },
+          });
         },
       },
-      orderService: {
-        ...OrderService,
-        async find(repository: OrderRepository): Promise<PublicOrder | null> {
-          assert.equal(repository, orders);
-          calls.orderFind += 1;
-          return null;
-        },
-        async create(
-          repository: OrderRepository,
-          customers: UserRepository,
-        ): Promise<PublicOrder | null> {
+      orderServiceFactory: {
+        create(repository: OrderRepository, customers: UserRepository): OrderService {
           assert.equal(repository, orders);
           assert.equal(customers, users);
-          calls.orderCreate += 1;
-          return null;
+          calls.orderServiceFactory += 1;
+          return Object.freeze({
+            ...OrderService.create(repository, customers),
+            async find(orderId: OrderId): Promise<PublicOrder | null> {
+              assert.equal(orderId, id);
+              calls.orderFind += 1;
+              return null;
+            },
+            async create(customerId: UserId): Promise<PublicOrder | null> {
+              assert.equal(customerId, id);
+              calls.orderCreate += 1;
+              return null;
+            },
+          });
         },
       },
     },
   );
-  const id = "00000000-0000-4000-8000-000000000000";
   assert.equal((await app.request("/users/" + id)).status, 404);
   assert.equal(calls.orderFactory, 0);
   assert.equal((await app.request("/orders/" + id)).status, 404);
-  assert.equal(calls.userFactory, 1);
+  assert.equal(calls.userFactory, 2);
   assert.equal(
     (
       await app.request("/orders", {
@@ -79,8 +100,10 @@ void test("controllerはContext内の該当モデルだけをfactoryへ渡し、
     404,
   );
   assert.deepEqual(calls, {
-    userFactory: 2,
+    userFactory: 3,
     orderFactory: 2,
+    userServiceFactory: 1,
+    orderServiceFactory: 2,
     userFind: 1,
     orderFind: 1,
     orderCreate: 1,
@@ -113,11 +136,11 @@ void test("差し替え依存はアプリ組立時に一度だけ選択し、リ
         reads.orderFactory += 1;
         return orderFactory;
       },
-      get userService(): typeof UserService {
+      get userServiceFactory(): typeof UserService {
         reads.userService += 1;
         return UserService;
       },
-      get orderService(): typeof OrderService {
+      get orderServiceFactory(): typeof OrderService {
         reads.orderService += 1;
         return OrderService;
       },

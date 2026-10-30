@@ -26,39 +26,36 @@ void test("注文ユースケースは有効顧客の確認後だけ保存を行
       await orders.insert(order);
     },
   };
+  const service = OrderService.create(repository, users);
+  assert(Object.isFrozen(OrderService));
+  assert(Object.isFrozen(service));
   assert.equal(
-    await OrderService.create(
-      repository,
-      users,
-      UserIdSchema.parse("00000000-0000-4000-8000-000000000000"),
-    ),
+    await service.create(UserIdSchema.parse("00000000-0000-4000-8000-000000000000")),
     null,
   );
   assert.equal(inserts, 0);
-  const customer = await UserService.register(
-    users,
-    passwordHasher,
+  const customer = await UserService.create(users, passwordHasher).register(
     UserNameSchema.parse("顧客サンプル"),
     NewPasswordSchema.parse("demo-only-long-password"),
   );
   const entity = await users.findById(customer.id);
   assert(entity);
   await users.update(entity.disable(), 0);
-  await assert.rejects(OrderService.create(repository, users, customer.id), DomainRuleError);
+  await assert.rejects(service.create(customer.id), DomainRuleError);
   assert.equal(inserts, 0);
   await users.update(entity.disable().reactivate(), 1);
-  const order = await OrderService.create(repository, users, customer.id);
+  const order = await service.create(customer.id);
   assert(order);
   assert.equal(order.customerId, customer.id);
   assert.equal(inserts, 1);
+  const otherService = OrderService.create(MemoryOrderRepository.create(), users);
+  assert.equal(await otherService.find(order.id), null);
 });
 
 void test("並行ユースケースは読込versionを保存条件に渡し、競合側を勝手に再実行しない", async () => {
   const users = MemoryUserRepository.create();
   const orders = MemoryOrderRepository.create();
-  const customer = await UserService.register(
-    users,
-    passwordHasher,
+  const customer = await UserService.create(users, passwordHasher).register(
     UserNameSchema.parse("並行処理サンプル"),
     NewPasswordSchema.parse("demo-only-long-password"),
   );
@@ -70,18 +67,18 @@ void test("並行ユースケースは読込versionを保存条件に渡し、�
       await orders.update(order, expectedVersion);
     },
   };
-  const created = await OrderService.create(repository, users, customer.id);
+  const service = OrderService.create(repository, users);
+  assert(Object.isFrozen(service));
+  const created = await service.create(customer.id);
   assert(created);
   const outcomes = await Promise.allSettled([
-    OrderService.addLine(
-      repository,
+    service.addLine(
       created.id,
       ProductCodeSchema.parse("FIRST"),
       UnitPriceYenSchema.parse(100),
       QuantitySchema.parse(1),
     ),
-    OrderService.addLine(
-      repository,
+    service.addLine(
       created.id,
       ProductCodeSchema.parse("SECOND"),
       UnitPriceYenSchema.parse(200),
@@ -93,7 +90,7 @@ void test("並行ユースケースは読込versionを保存条件に渡し、�
   assert(rejected && rejected.status === "rejected");
   assert(rejected.reason instanceof ConflictError);
   assert.equal(updates, 2);
-  const stored = await OrderService.find(repository, created.id);
+  const stored = await service.find(created.id);
   assert(stored);
   assert.equal(stored.version, 1);
   assert.equal(stored.lines.length, 1);

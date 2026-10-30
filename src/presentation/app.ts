@@ -16,7 +16,7 @@ import { healthRoute } from "./routes/health-routes.js";
 
 import type { AppDependencies, AppOptions } from "./dependencies.js";
 
-// 手動 DI: HTTP 層は依存を受け取り、直接の操作オブジェクトへ引数として渡す。
+// 手動 DI: factory実装は組立時に選び、各リクエストのcontrollerで依存を一度渡す。
 export function createApp(
   dependencies: AppDependencies,
   options: AppOptions = {},
@@ -52,13 +52,13 @@ export function createApp(
   const orderRepositoryFactory = options.orderRepositoryFactory ?? DynamoOrderRepository;
   registerUserRoutes(app, {
     userRepositoryFactory,
-    userService: options.userService ?? UserService,
+    userServiceFactory: options.userServiceFactory ?? UserService,
     passwordHasher: dependencies.passwordHasher,
   });
   registerOrderRoutes(app, {
     userRepositoryFactory,
     orderRepositoryFactory,
-    orderService: options.orderService ?? OrderService,
+    orderServiceFactory: options.orderServiceFactory ?? OrderService,
   });
   registerDocumentationRoutes(app);
   app.notFound((c) => c.json({ error: "見つかりません" }, 404));

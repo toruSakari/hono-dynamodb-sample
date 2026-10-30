@@ -17,18 +17,18 @@ export type AppOptions = Readonly<{
   contextDependencies?: RequestContextDependencies;
   userRepositoryFactory?: typeof DynamoUserRepository;
   orderRepositoryFactory?: typeof DynamoOrderRepository;
-  userService?: UserService;
-  orderService?: OrderService;
+  userServiceFactory?: typeof UserService;
+  orderServiceFactory?: typeof OrderService;
 }>;
 
 // コントローラーには組立時に確定した依存だけを渡す。dbはContextから取得する。
 export type UserRouteDependencies = Readonly<{
   userRepositoryFactory: typeof DynamoUserRepository;
-  userService: UserService;
+  userServiceFactory: typeof UserService;
   passwordHasher: PasswordHasher;
 }>;
 export type OrderRouteDependencies = Readonly<{
   userRepositoryFactory: typeof DynamoUserRepository;
   orderRepositoryFactory: typeof DynamoOrderRepository;
-  orderService: OrderService;
+  orderServiceFactory: typeof OrderService;
 }>;

@@ -355,13 +355,15 @@ OpenAPI 公式参考:
 - `create` / 条件付き `put` は各Repositoryに残し、モデルの型やOrder専用のサイズ制限をその場で読めるようにしています。
 - Entityの基底クラスや汎用factoryは作りません。Userの状態ルール、Orderの明細整合性、Passwordの秘密状態は別々に保ちます。Orderの子はstate.linesにまとめ、保存レコードと子エンティティの二重保持を避けます。
 
-### Serviceは直接オブジェクトとして使う
+### Serviceもcreate → buildで依存を閉じ込める
 
-`UserService` / `OrderService` は `Object.freeze` した操作オブジェクトです。生成関数や共通updateを挟まず、各メソッドにRepositoryやHasherを渡します。各操作に取得・ドメイン操作・保存を明記し、競合時も自動でやり直しません。
+`UserService.create(repository, hasher)` / `OrderService.create(orderRepository, userRepository)` が非公開の `build` を通じて凍結したサービスを返します。依存は生成時に一度だけ注入し、各メソッドは検証済みの業務引数だけを受け取ります。共通updateにはまとめず、各操作に取得・ドメイン操作・保存を明記し、競合時も自動でやり直しません。
 
 ```ts
-const user = await UserService.rename(userRepository, userId, validatedName);
-const order = await OrderService.confirm(orderRepository, orderId);
+const users = UserService.create(userRepository, passwordHasher);
+const orders = OrderService.create(orderRepository, userRepository);
+const user = await users.rename(userId, validatedName);
+const order = await orders.confirm(orderId);
 ```
 
 手動DIの組立場所は `bootstrap/server.ts` です。HTTP層はContext内の設定済みDBモデルからRepositoryを組み立て、Repositoryと必要なHasherだけをServiceへ渡します。DynamoDB接続やハッシュ実装そのものはHTTPハンドラー内で生成しません。
@@ -372,21 +374,24 @@ const order = await OrderService.confirm(orderRepository, orderId);
 // コントローラー内。dbはミドルウェアが設定した型付きContext変数。
 const db = c.get("db");
 const repository = DynamoUserRepository.create(db.users);
-const user = await UserService.rename(repository, userId, validatedName);
+const service = UserService.create(repository, passwordHasher);
+const user = await service.rename(userId, validatedName);
 ```
 
 `DynamoUserRepository` / `DynamoOrderRepository` の凍結した操作オブジェクトから `create` を呼ぶと、非公開の `build` がメソッド付きの凍結Repositoryを返します。Repositoryが受け取るのは接続先・テーブルを設定済みのElectroDBモデル（db）だけです。モデル組立はbootstrap側に置き、HTTPミドルウェア経由でContextに設定します。コントローラーはContext全体ではなく `db.users` / `db.orders` だけをRepositoryに渡します。Hono ContextもDBモデルもユースケースへ渡しません。
 
-`MemoryUserRepository.create()` / `MemoryOrderRepository.create()` も同じ構造ですが、呼び出すたびに独立したMapを生成します。サービスは直接オブジェクト方式のままで、生成済みRepositoryを引数で受け取ります。
+`MemoryUserRepository.create()` / `MemoryOrderRepository.create()` も同じ構造ですが、呼び出すたびに独立したMapを生成します。サービスも生成時にRepositoryを受け取り、状態や接続をグローバルに持ちません。
 
-DBモデルは起動時に生成して共有し、リクエストごとにDB接続を作り直しません。Repositoryは各コントローラーで軽量な操作オブジェクトとして組み立てます。Contextへの設定は認証やテナント分離ではありません。
+DBモデルは起動時に生成して共有し、リクエストごとにDB接続を作り直しません。RepositoryとServiceは各コントローラーで軽量な操作オブジェクトとして組み立てます。Contextへの設定は認証やテナント分離ではありません。
 
 ### optionsはアプリ組立時だけ使う
 
-`AppOptions` はテスト用の差し替え口です。`createApp` が既定値を一度だけ選び、User/Orderコントローラーには必要な確定済み依存だけを渡します。各ハンドラーは `options.xxx ?? 既定実装` を繰り返さず、ContextからDBを取得→Repository生成→Service呼び出しに集中します。
+`AppOptions` はテスト用の差し替え口です。`createApp` が既定値を一度だけ選び、User/Orderコントローラーには必要な確定済み依存だけを渡します。各ハンドラーは `options.xxx ?? 既定実装` を繰り返さず、ContextからDBを取得→Repository生成→Service生成→業務操作呼び出しに集中します。
 
 ### 集約の実行中stateと保存形式
 
 Orderの内部は `state.lines: readonly OrderLine[]` とし、別のlines変数を持ちません。追加・変更・削除はエンティティ配列のまま新しいstateを組み立てます。`restore` でunknownを保存スキーマ検証して子を復元し、`toPersistenceSnapshot` で保存用のプレーンなレコードへ変換します。公開snapshotは引き続き許可リストスキーマで検証・凍結します。
 
 Userも同様に `state.password: Password` へまとめ、別変数との二重保持を避けています。生のハッシュ文字列は保存境界でのみ取り出し、公開snapshotではpassword自体も除去します。OrderLineとPasswordは既に単一stateのため、不要な汎用化はしていません。
+
+`OrderService.create(...)` はサービスの組立、返された `service.create(customerId)` は注文の作成です。既存の業務操作名は維持しています。テストでは `userServiceFactory` / `orderServiceFactory` を差し替えられます。

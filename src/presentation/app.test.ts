@@ -161,9 +161,7 @@ void test("無効 User の HTTP 変更は409、管理者向け状態操作はHTT
 
 void test("保存済みpasswordHashを含むUserからHTTPへ公開項目だけを返す", async () => {
   const users = MemoryUserRepository.create();
-  const customer = await UserService.register(
-    users,
-    passwordHasher,
+  const customer = await UserService.create(users, passwordHasher).register(
     UserNameSchema.parse("境界サンプル"),
     NewPasswordSchema.parse("demo-only-long-password"),
   );

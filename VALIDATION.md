@@ -13,6 +13,7 @@
   注文作成・明細追加/数量変更・確定・確定後の変更拒否・再取得も成功。
   公開レスポンスのプロパティは id / name / email / status / version のみ。
 - 依存差し替えはアプリ組立時に一度だけ選択され、リクエスト時にoptionsを再参照しないことを確認。
+- Service.createでRepository/Hasherを注入し、凍結したService間で依存が混ざらないこと、各操作が業務引数だけを受け取ることを確認。
 - 公開スキーマは秘密/未知項目を除去し、snapshotと生HTTP応答にハッシュが含まれないこと、Orderの深い凍結を確認。
 - ContextのDBモデル同一性・外部入力での置換不可・Repositoryにはモデルのみ/ServiceにはRepositoryのみの受渡し: 成功。
 - OpenAPI 3.1 生成、公開 DTO とエラー契約、Swagger UI HTML、相関 ID / timing / セキュリティヘッダ: 成功。
