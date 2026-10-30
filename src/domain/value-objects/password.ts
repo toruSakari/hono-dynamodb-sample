@@ -12,7 +12,7 @@ const persistence = new WeakMap<Password, PasswordHash>();
 function build(hash: PasswordHash): Password {
   const password = Object.freeze<Password>({
     // ソルト付きハッシュの単純比較ではなく、平文候補をアルゴリズムで照合する。
-    matches(candidate: PasswordCandidate, hasher: PasswordHasher): Promise<boolean> {
+    matches(candidate: PasswordCandidate, hasher: PasswordHasher) {
       return hasher.verify(hash, candidate);
     },
   });

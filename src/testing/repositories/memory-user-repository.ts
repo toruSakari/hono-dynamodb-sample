@@ -8,17 +8,17 @@ import type { StoredUser } from "../../domain/entities/user.js";
 function build(): UserRepository {
   const records = new Map<string, StoredUser>();
   return Object.freeze<UserRepository>({
-    async findById(id: UserId): Promise<User | null> {
+    async findById(id: UserId) {
       return records.has(id) ? User.restore(records.get(id)) : null;
     },
-    async insert(user: User): Promise<void> {
+    async insert(user: User) {
       const record = User.toPersistenceSnapshot(user);
       if (records.has(record.id) || record.version !== 0) {
         throw new ConflictError();
       }
       records.set(record.id, record);
     },
-    async update(user: User, expectedVersion: number): Promise<void> {
+    async update(user: User, expectedVersion: number) {
       const record = User.toPersistenceSnapshot(user);
       if (
         records.get(record.id)?.version !== expectedVersion ||

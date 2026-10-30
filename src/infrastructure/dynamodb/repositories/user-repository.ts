@@ -43,7 +43,7 @@ function build(db: UserModel): UserRepository {
     }
   }
   return Object.freeze<UserRepository>({
-    async findById(id: UserId): Promise<User | null> {
+    async findById(id: UserId) {
       // 整形済み結果では未知フィールド等が落ちるため raw で読み、ドメインで再検証する。
       const raw: unknown = await db
         .get({ id })
@@ -61,10 +61,10 @@ function build(db: UserModel): UserRepository {
         throw new Error("保存レコードの復元に失敗しました");
       }
     },
-    insert(user: User): Promise<void> {
+    insert(user: User) {
       return write(user);
     },
-    update(user: User, expectedVersion: number): Promise<void> {
+    update(user: User, expectedVersion: number) {
       return write(user, expectedVersion);
     },
   });

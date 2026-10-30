@@ -8,17 +8,17 @@ import { ConflictError } from "../../domain/errors/conflict-error.js";
 function build(): OrderRepository {
   const records = new Map<string, StoredOrder>();
   return Object.freeze<OrderRepository>({
-    async findById(id: OrderId): Promise<Order | null> {
+    async findById(id: OrderId) {
       return records.has(id) ? Order.restore(records.get(id)) : null;
     },
-    async insert(order: Order): Promise<void> {
+    async insert(order: Order) {
       const record = Order.toPersistenceSnapshot(order);
       if (records.has(record.id) || record.version !== 0) {
         throw new ConflictError("注文の作成が競合しました");
       }
       records.set(record.id, record);
     },
-    async update(order: Order, expectedVersion: number): Promise<void> {
+    async update(order: Order, expectedVersion: number) {
       const record = Order.toPersistenceSnapshot(order);
       if (
         records.get(record.id)?.version !== expectedVersion ||

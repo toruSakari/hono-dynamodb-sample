@@ -72,16 +72,16 @@ function build(input: UserState): User {
   };
   const user = Object.freeze<User>({
     // 公開 DTO はハッシュを含まず、コピーも不変にする。
-    snapshot(): PublicUser {
+    snapshot() {
       return PublicUserSchema.parse(state);
     },
     // 無効ユーザーのプロフィール変更を拒否し、新しい集約を返す。
-    rename(name: UserName): User {
+    rename(name: UserName) {
       requireActive();
       return build({ ...state, name, version: state.version + 1 });
     },
     // 構文検証済みのアドレスを受け取る。所有権確認済みという意味にはしない。
-    changeEmail(email: EmailAddress): User {
+    changeEmail(email: EmailAddress) {
       requireActive();
       return build({
         ...state,
@@ -90,23 +90,19 @@ function build(input: UserState): User {
       });
     },
     // 無効化で照合とプロフィール変更を停止する。二重無効化は不正遷移。
-    disable(): User {
+    disable() {
       requireActive();
       return build({ ...state, status: DisabledUserStatus, version: state.version + 1 });
     },
     // 無効状態からだけ復帰できる。実アプリでは管理者の認可が別途必要。
-    reactivate(): User {
+    reactivate() {
       if (state.status !== "disabled") {
         throw new DomainRuleError("有効ユーザーは再有効化できません");
       }
       return build({ ...state, status: ActiveUserStatus, version: state.version + 1 });
     },
     // 本人の現在のパスワードが一致した場合だけ変更する。管理者リセットとは別の操作。
-    async changePassword(
-      current: PasswordCandidate,
-      next: NewPassword,
-      hasher: PasswordHasher,
-    ): Promise<User> {
+    async changePassword(current: PasswordCandidate, next: NewPassword, hasher: PasswordHasher) {
       requireActive();
       if (!(await state.password.matches(current, hasher))) {
         throw new InvalidCurrentPasswordError("現在のパスワードが一致しません");
@@ -119,7 +115,7 @@ function build(input: UserState): User {
       });
     },
     // 無効ユーザーは、正しいパスワードでも認証可能と判定しない。
-    async verifyPassword(candidate: PasswordCandidate, hasher: PasswordHasher): Promise<boolean> {
+    async verifyPassword(candidate: PasswordCandidate, hasher: PasswordHasher) {
       return state.status === "active" && (await state.password.matches(candidate, hasher));
     },
   });

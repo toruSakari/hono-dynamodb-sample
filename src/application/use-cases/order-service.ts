@@ -27,7 +27,7 @@ export type OrderService = Readonly<{
 // 依存は生成時に閉じ込め、各操作は業務引数だけを受け取る。
 function build(repository: OrderRepository, users: UserRepository): OrderService {
   return Object.freeze<OrderService>({
-    async create(customerId: UserId): Promise<PublicOrder | null> {
+    async create(customerId: UserId) {
       const customer = await users.findById(customerId);
       if (!customer) {
         return null;
@@ -40,7 +40,7 @@ function build(repository: OrderRepository, users: UserRepository): OrderService
       await repository.insert(order);
       return order.snapshot();
     },
-    async find(id: OrderId): Promise<PublicOrder | null> {
+    async find(id: OrderId) {
       return (await repository.findById(id))?.snapshot() ?? null;
     },
     async addLine(
@@ -48,7 +48,7 @@ function build(repository: OrderRepository, users: UserRepository): OrderService
       productCode: ProductCode,
       unitPriceYen: UnitPriceYen,
       quantity: Quantity,
-    ): Promise<PublicOrder | null> {
+    ) {
       const order = await repository.findById(id);
       if (!order) {
         return null;
@@ -57,11 +57,7 @@ function build(repository: OrderRepository, users: UserRepository): OrderService
       await repository.update(changed, order.snapshot().version);
       return changed.snapshot();
     },
-    async changeQuantity(
-      id: OrderId,
-      lineId: OrderLineId,
-      quantity: Quantity,
-    ): Promise<PublicOrder | null> {
+    async changeQuantity(id: OrderId, lineId: OrderLineId, quantity: Quantity) {
       const order = await repository.findById(id);
       if (!order) {
         return null;
@@ -70,7 +66,7 @@ function build(repository: OrderRepository, users: UserRepository): OrderService
       await repository.update(changed, order.snapshot().version);
       return changed.snapshot();
     },
-    async removeLine(id: OrderId, lineId: OrderLineId): Promise<PublicOrder | null> {
+    async removeLine(id: OrderId, lineId: OrderLineId) {
       const order = await repository.findById(id);
       if (!order) {
         return null;
@@ -79,7 +75,7 @@ function build(repository: OrderRepository, users: UserRepository): OrderService
       await repository.update(changed, order.snapshot().version);
       return changed.snapshot();
     },
-    async confirm(id: OrderId): Promise<PublicOrder | null> {
+    async confirm(id: OrderId) {
       const order = await repository.findById(id);
       if (!order) {
         return null;

@@ -27,19 +27,15 @@ export type UserService = Readonly<{
 // 依存は生成時に閉じ込め、各操作は業務引数だけを受け取る。
 function build(repository: UserRepository, hasher: PasswordHasher): UserService {
   return Object.freeze<UserService>({
-    async register(
-      name: UserName,
-      password: NewPassword,
-      email?: EmailAddress,
-    ): Promise<PublicUser> {
+    async register(name: UserName, password: NewPassword, email?: EmailAddress) {
       const user = await User.create(name, password, hasher, email);
       await repository.insert(user);
       return user.snapshot();
     },
-    async find(id: UserId): Promise<PublicUser | null> {
+    async find(id: UserId) {
       return (await repository.findById(id))?.snapshot() ?? null;
     },
-    async rename(id: UserId, name: UserName): Promise<PublicUser | null> {
+    async rename(id: UserId, name: UserName) {
       const user = await repository.findById(id);
       if (!user) {
         return null;
@@ -48,7 +44,7 @@ function build(repository: UserRepository, hasher: PasswordHasher): UserService 
       await repository.update(changed, user.snapshot().version);
       return changed.snapshot();
     },
-    async changeEmail(id: UserId, email: EmailAddress): Promise<PublicUser | null> {
+    async changeEmail(id: UserId, email: EmailAddress) {
       const user = await repository.findById(id);
       if (!user) {
         return null;
@@ -57,11 +53,7 @@ function build(repository: UserRepository, hasher: PasswordHasher): UserService 
       await repository.update(changed, user.snapshot().version);
       return changed.snapshot();
     },
-    async changePassword(
-      id: UserId,
-      current: PasswordCandidate,
-      next: NewPassword,
-    ): Promise<PublicUser | null> {
+    async changePassword(id: UserId, current: PasswordCandidate, next: NewPassword) {
       const user = await repository.findById(id);
       if (!user) {
         return null;
@@ -71,7 +63,7 @@ function build(repository: UserRepository, hasher: PasswordHasher): UserService 
       return changed.snapshot();
     },
     // 状態管理の認可は呼び出し側で行う。HTTPには公開しない。
-    async disable(id: UserId): Promise<PublicUser | null> {
+    async disable(id: UserId) {
       const user = await repository.findById(id);
       if (!user) {
         return null;
@@ -81,7 +73,7 @@ function build(repository: UserRepository, hasher: PasswordHasher): UserService 
       return changed.snapshot();
     },
     // 状態管理の認可は呼び出し側で行う。HTTPには公開しない。
-    async reactivate(id: UserId): Promise<PublicUser | null> {
+    async reactivate(id: UserId) {
       const user = await repository.findById(id);
       if (!user) {
         return null;

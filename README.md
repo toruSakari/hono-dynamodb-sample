@@ -395,3 +395,7 @@ Orderの内部は `state.lines: readonly OrderLine[]` とし、別のlines変数
 Userも同様に `state.password: Password` へまとめ、別変数との二重保持を避けています。生のハッシュ文字列は保存境界でのみ取り出し、公開snapshotではpassword自体も除去します。OrderLineとPasswordは既に単一stateのため、不要な汎用化はしていません。
 
 `OrderService.create(...)` はサービスの組立、返された `service.create(customerId)` は注文の作成です。既存の業務操作名は維持しています。テストでは `userServiceFactory` / `orderServiceFactory` を差し替えられます。
+
+### 戻り値型の記述
+
+Service / Entity / Repositoryなどの契約型と、公開factory・buildの戻り値型は明示します。`Object.freeze<UserService>({...})` のように契約で文脈型が付く実装メソッドでは、同じ戻り値型を重ねて書きません。引数のブランド型は明示し、契約への適合とunsafe anyは型検査で確認します。

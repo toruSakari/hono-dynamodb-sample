@@ -4,6 +4,7 @@
 
 - 分割代入禁止の AST 検査: 実装・テスト・スクリプトを検査し成功。
 - Vite+ 1.4.0: starter準拠の全体整形・型付きlint（unsafe any検査を含む）・型チェック成功。
+- 契約で文脈型が付く42メソッドの冗長な戻り値注釈を除去。変更前後で生成した83個の宣言ファイルが完全一致し、公開APIの型拡大がないことを確認（宣言生成物は公開対象外）。
 - TypeScript 型検査: src / scripts / vite.config.ts を含め成功。管理対象のJS/mjs/cjsなし。
 - ドメイン・Hono リクエストテスト: 59 件成功。
 - ElectroDB + 実 DynamoDB Local 統合テスト: 2 件成功。

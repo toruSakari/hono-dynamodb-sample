@@ -48,7 +48,7 @@ function build(db: OrderModel): OrderRepository {
     }
   }
   return Object.freeze<OrderRepository>({
-    async findById(id: OrderId): Promise<Order | null> {
+    async findById(id: OrderId) {
       const raw: unknown = await db
         .get({ id })
         .go({ data: "raw", consistent: true, originalErr: true });
@@ -65,10 +65,10 @@ function build(db: OrderModel): OrderRepository {
         throw new Error("注文集約の復元に失敗しました");
       }
     },
-    insert(order: Order): Promise<void> {
+    insert(order: Order) {
       return write(order);
     },
-    update(order: Order, expectedVersion: number): Promise<void> {
+    update(order: Order, expectedVersion: number) {
       return write(order, expectedVersion);
     },
   });

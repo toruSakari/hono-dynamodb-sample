@@ -6,7 +6,7 @@ import type { PasswordHasher } from "../../domain/services/password-hasher.js";
 import { PasswordHashSchema } from "../../domain/value-objects/password-hash.js";
 
 export const passwordHasher: PasswordHasher = Object.freeze<PasswordHasher>({
-  async hash(password: NewPassword): Promise<PasswordHash> {
+  async hash(password: NewPassword) {
     return PasswordHashSchema.parse(
       await argon2.hash(password, {
         type: argon2.argon2id,
@@ -17,7 +17,7 @@ export const passwordHasher: PasswordHasher = Object.freeze<PasswordHasher>({
       }),
     );
   },
-  async verify(hash: PasswordHash, candidate: PasswordCandidate): Promise<boolean> {
+  async verify(hash: PasswordHash, candidate: PasswordCandidate) {
     return argon2.verify(hash, candidate);
   },
 });

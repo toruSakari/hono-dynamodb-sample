@@ -85,7 +85,7 @@ function build(input: OrderState): Order {
   };
   const order = Object.freeze<Order>({
     // 子の操作オブジェクトは渡さず、深く凍結した公開スナップショットだけを返す。
-    snapshot(): PublicOrder {
+    snapshot() {
       const snapshots = state.lines.map((line) => line.snapshot());
       return PublicOrderSchema.parse({
         ...state,
@@ -94,7 +94,7 @@ function build(input: OrderState): Order {
       });
     },
     // 同一商品の重複・20明細超をルートで防ぐ。子だけでは判定できない集約ルール。
-    addLine(productCode: ProductCode, unitPriceYen: UnitPriceYen, quantity: Quantity): Order {
+    addLine(productCode: ProductCode, unitPriceYen: UnitPriceYen, quantity: Quantity) {
       requireDraft();
       if (state.lines.length >= 20) {
         throw new DomainRuleError("注文は20明細までです");
@@ -110,7 +110,7 @@ function build(input: OrderState): Order {
       });
     },
     // 所属を確認してから子の振る舞いを呼ぶ。変更された子も新しい注文にだけ所属する。
-    changeQuantity(lineId: OrderLineId, quantity: Quantity): Order {
+    changeQuantity(lineId: OrderLineId, quantity: Quantity) {
       requireDraft();
       const existing = requireLine(lineId);
       const changed = existing.changeQuantity(quantity);
@@ -121,7 +121,7 @@ function build(input: OrderState): Order {
       });
     },
     // 明細の削除もルートを経由し、確定後の変更を一律に拒否する。
-    removeLine(lineId: OrderLineId): Order {
+    removeLine(lineId: OrderLineId) {
       requireDraft();
       const existing = requireLine(lineId);
       return build({
@@ -131,7 +131,7 @@ function build(input: OrderState): Order {
       });
     },
     // 注文全体に対する確定。空注文は不可で、確定後は子の数量も変更できない。
-    confirm(): Order {
+    confirm() {
       requireDraft();
       if (state.lines.length === 0) {
         throw new DomainRuleError("空の注文は確定できません");
